@@ -23,25 +23,14 @@ pub struct Translation {
 
 impl Translation {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        Self {
-            id: Uuid::new_v4().into(),
-            focus_handle: cx.focus_handle(),
-            server: Server::new(window, cx),
-            file_path: None,
-            glossary: None,
-            current_page: 0,
-            pages: Vec::new(),
-            pending: VecDeque::new(),
-            display: DisplayType::default(),
-            history: None,
-        }
+        Self::from_server(Server::new(window, cx), cx)
     }
 
     pub fn from_server(server: Server, cx: &mut Context<Self>) -> Self {
         Self {
             id: Uuid::new_v4().into(),
             focus_handle: cx.focus_handle(),
-            server: server,
+            server,
             file_path: None,
             glossary: None,
             current_page: 0,

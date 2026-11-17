@@ -65,12 +65,18 @@ impl Translation {
     }
 
     pub fn select_epub(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_running() {
+            return;
+        }
         cx.spawn(async move |this, cx| {
             if let Some(handle) = select_epub_dialog().await {
                 let buffer = handle.read().await;
                 let pages = cx.background_spawn(async { get_pages(buffer) }).await?;
 
                 this.update(cx, |this, cx| {
+                    if this.is_running() {
+                        return;
+                    }
                     this.set_epub(handle.path(), pages);
                     cx.notify();
                 })?;
@@ -81,10 +87,16 @@ impl Translation {
     }
 
     pub fn select_glossary(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_running() {
+            return;
+        }
         cx.spawn(async move |this, cx| {
             if let Some(handle) = select_glossary_dialog().await {
                 let glossary = String::from_utf8(handle.read().await)?;
                 this.update(cx, |view, cx| {
+                    if view.is_running() {
+                        return;
+                    }
                     view.glossary = Some((handle.path().into(), glossary));
                     cx.notify();
                 })?;
@@ -110,12 +122,18 @@ impl Translation {
     }
 
     pub fn recover(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.is_running() {
+            return;
+        }
         cx.spawn(async move |this, cx| {
             let handle = select_recovery_dialog().await;
             if let Some(handle) = handle {
                 let json = handle.read().await;
                 let pages: Vec<Page> = serde_json::from_slice(&json)?;
                 this.update(cx, |this, cx| {
+                    if this.is_running() {
+                        return;
+                    }
                     this.recover_pages(pages);
                     cx.notify();
                 })?;

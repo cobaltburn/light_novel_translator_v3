@@ -3,9 +3,7 @@ use crate::{
     error::{Error, Result},
     server::{Method, ServerBuilder, ServerUpdate},
 };
-use gpui_kit::{
-    AppContext, Context, Entity, Task, Window, base::IndexPath, component::select::SelectState,
-};
+use gpui_kit::{Context, Entity, Task, Window, component::select::SelectState};
 
 #[derive(Debug)]
 pub struct Server {
@@ -18,15 +16,7 @@ pub struct Server {
 
 impl Server {
     pub fn new<T: ServerUpdate + 'static>(window: &mut Window, cx: &mut Context<T>) -> Self {
-        let models = cx
-            .new(|cx| SelectState::new(Vec::new().clone(), Some(IndexPath::default()), window, cx));
-        Self {
-            client: Client::Disconnected,
-            models,
-            handles: Vec::new(),
-            settings: Settings::new(window, cx),
-            method: Method::History,
-        }
+        ServerBuilder::default().build(window, cx)
     }
 
     pub fn connected(&self) -> bool {

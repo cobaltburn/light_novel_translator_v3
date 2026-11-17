@@ -26,33 +26,6 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new<T: ServerUpdate + 'static>(window: &mut Window, cx: &mut Context<T>) -> Self {
-        let context_window = DEFAULT_CONTEXT_WINDOW.to_string();
-        let context_window =
-            number_input_entity(context_window, 1.0, 100.0, USIZE_STEP as f64, window, cx);
-
-        let temperature =
-            number_input_entity(TEMPERATURE.to_string(), 0.1, 2.0, F64_STEP, window, cx);
-
-        let top_p = number_input_entity(TOP_P.to_string(), 0.1, 2.0, F64_STEP, window, cx);
-
-        let repeat_penalty =
-            number_input_entity(REPEAT_PENALTY.to_string(), 0.0, 2.0, F64_STEP, window, cx);
-
-        bind_input(&context_window, |s| &mut s.context_window.0, window, cx);
-        bind_input(&temperature, |s| &mut s.temperature.0, window, cx);
-        bind_input(&top_p, |s| &mut s.top_p.0, window, cx);
-        bind_input(&repeat_penalty, |s| &mut s.repeat_penalty.0, window, cx);
-
-        Settings {
-            think: Think::default(),
-            context_window: (DEFAULT_CONTEXT_WINDOW, context_window),
-            temperature: (TEMPERATURE, temperature),
-            top_p: (TOP_P, top_p),
-            repeat_penalty: (REPEAT_PENALTY, repeat_penalty),
-        }
-    }
-
     pub fn from_values<T: ServerUpdate + 'static>(
         think: Think,
         context_window: usize,

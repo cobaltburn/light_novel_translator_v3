@@ -8,7 +8,7 @@ impl Translator {
     pub fn close_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         if self.translations.len() > 1 {
             self.translations.remove(index);
-            if self.active_tab > index && self.active_tab == self.translations.len() {
+            if self.active_tab > index {
                 self.active_tab -= 1;
             }
             self.active_tab = self.active_tab.min(self.translations.len() - 1);

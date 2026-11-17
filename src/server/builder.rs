@@ -2,7 +2,7 @@ use crate::{
     client::{Client, DEFAULT_CONTEXT_WINDOW, REPEAT_PENALTY, Settings, TEMPERATURE, TOP_P, Think},
     server::{Method, Server, ServerUpdate},
 };
-use gpui_kit::{AppContext as _, Context, Window, component::select::SelectState};
+use gpui_kit::{AppContext as _, Context, Window, base::IndexPath, component::select::SelectState};
 
 pub struct ServerBuilder {
     pub client: Client,
@@ -20,7 +20,7 @@ impl ServerBuilder {
         window: &mut Window,
         cx: &mut Context<T>,
     ) -> Server {
-        let models = cx.new(|cx| SelectState::new(Vec::new(), None, window, cx));
+        let models = cx.new(|cx| SelectState::new(Vec::new(), Some(IndexPath::new(0)), window, cx));
 
         let settings = Settings::from_values(
             self.think,

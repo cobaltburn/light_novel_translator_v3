@@ -17,6 +17,7 @@ use gpui_kit::{
 
 impl Translation {
     pub fn epub_popover(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let running = self.is_running();
         Popover::new((self.id.clone(), "epub-popover"))
             .gap_3()
             .min_w(px(450.0))
@@ -32,13 +33,15 @@ impl Translation {
                 "epub",
                 self.epub_name().unwrap_or_default(),
                 cx.listener(Self::select_epub),
-            ))
+            )
+            .disable(running))
             .child(LabelButton::new(
                 (self.id.clone(), "glossary-button"),
                 "glossary",
                 self.glossary_name().unwrap_or_default(),
                 cx.listener(Self::select_glossary),
-            ))
+            )
+            .disable(running))
             .child(
                 h_flex().justify_center().items_center().gap_2().children([
                     Button::new((self.id.clone(), "save-button"))
@@ -46,6 +49,7 @@ impl Translation {
                         .on_click(cx.listener(Self::save)),
                     Button::new((self.id.clone(), "recover-button"))
                         .label("recover")
+                        .disabled(running)
                         .on_click(cx.listener(Self::recover)),
                 ]),
             )
