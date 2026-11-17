@@ -1,0 +1,28 @@
+[package]
+name = "light_novel_translator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fast_html2md = "0.0.63"
+futures = "0.3.34"
+gpui-kit = "0.10.0"
+log = { version = "0.4.35", features = ["max_level_debug"] }
+percent-encoding = "2.3.2"
+phf = { version = "0.14.0", features = ["macros"] }
+pulldown-cmark = "0.13.6"
+quick-xml = "0.42.0"
+rayon = "1.12.0"
+rbook = "0.7.13"
+regex = "1.13.1"
+reqwest-middleware = "0.5.2"
+reqwest-retry = "0.9.1"
+rfd = { version = "0.18.0", features = ["xdg-portal"] }
+rig = { version = "0.46.0", features = ["memory", "reqwest-middleware"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+smol = "2.0.2"
+thiserror = "2.0.21"
+tokio = "1.54.1" 
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
