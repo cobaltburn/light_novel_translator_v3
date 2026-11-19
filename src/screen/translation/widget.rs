@@ -135,6 +135,7 @@ impl Translation {
                             .children(page.text(display, self.current_page, cx)),
                     )
                     .vertical_scrollbar(&self.scroll_handle)
+                    .child(page.error_cards(cx))
             }))
             .context_menu(move |menu, _window, _cx| {
                 let items = [

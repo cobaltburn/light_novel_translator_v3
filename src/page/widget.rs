@@ -1,13 +1,17 @@
 use crate::{
-    page::{Activity, Page},
+    page::{Activity, ErrorType, Page, PageError},
     screen::{DisplayType, SavePage, Translate, Translation},
 };
 use gpui_kit::{
-    App, ClickEvent, Context, Div, FocusHandle, Hsla, IntoElement, ParentElement as _, Styled,
-    Window,
+    App, ClickEvent, Context, Div, FocusHandle, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement as _, Styled, Window,
     assets::IconName,
-    base::h_flex,
-    component::{Icon, sidebar::SidebarMenuItem},
+    base::{h_flex, v_flex},
+    component::{
+        ActiveTheme, Icon,
+        button::{Button, ButtonVariants as _},
+        sidebar::SidebarMenuItem,
+    },
     div,
 };
 
@@ -74,9 +78,36 @@ impl Page {
             .flatten()
     }
 
-    /* pub fn error_cards(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        todo!()
-    } */
+    pub fn error_cards(&self, cx: &Context<Translation>) -> impl IntoElement {
+        let make_empty_button = |id: usize| {
+            Button::new(format!("empty-button-{}", id))
+                .primary()
+                .label(format!("Empty Section: {:2}", id + 1))
+        };
+        let error_buttons = self
+            .errors
+            .iter()
+            .enumerate()
+            .map(|(id, e)| e.error_button(id));
+
+        let empty_buttons = self
+            .sections
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.content.is_empty().then_some(i))
+            .map(make_empty_button);
+
+        v_flex()
+            .absolute()
+            .top_2()
+            .right_4()
+            .gap_1()
+            .p_1()
+            .rounded_md()
+            .bg(cx.theme().popover)
+            .occlude()
+            .children(empty_buttons.chain(error_buttons))
+    }
 }
 
 fn sidebar_icon(activity: Activity) -> Div {
@@ -91,5 +122,25 @@ fn sidebar_icon(activity: Activity) -> Div {
             .gap_1()
             .child(i.to_string())
             .child(Icon::new(IconName::Close).text_color(Hsla::red())),
+    }
+}
+
+impl PageError {
+    pub fn error_button(&self, id: usize) -> Button {
+        let position = self.index + 1;
+        let label = match self.error {
+            ErrorType::Japanese => format!("Japanese error: {:2}", position),
+            ErrorType::Size(c) => format!("Size error: {:2}, count:{}", position, c),
+            ErrorType::Repeat => format!("Repeat error: {:2}", position),
+            ErrorType::Copy => format!("Copy error: {:2}", position),
+            ErrorType::Image => format!("Image Tag error: {:2}", position),
+            ErrorType::Header => format!("Header Tag error: {:2}", position),
+            ErrorType::Link => format!("Link Tag error: {:2}", position),
+            ErrorType::End => format!("End Punctuation error: {:2}", position),
+        };
+
+        Button::new(format!("error-button-{}", id))
+            .primary()
+            .label(label)
     }
 }
