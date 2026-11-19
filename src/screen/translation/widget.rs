@@ -1,11 +1,13 @@
 use crate::{
-    screen::{DisplayType, SetDisplay, Translation},
+    screen::{DisplayType, ScrollTo, SetDisplay, Translation},
     widget::LabelButton,
 };
 use gpui_kit::{
-    Anchor, Context, Hsla, IntoElement, ParentElement as _, Styled as _,
+    Anchor, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    StatefulInteractiveElement as _, Styled as _,
     base::{Disableable, StyledExt as _, h_flex},
     component::{
+        ActiveTheme,
         button::{Button, ButtonVariants},
         menu::ContextMenuExt,
         popover::Popover,
@@ -18,37 +20,42 @@ use gpui_kit::{
 impl Translation {
     pub fn epub_popover(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let running = self.is_running();
-        Popover::new((self.id.clone(), "epub-popover"))
+        let epub = self.epub_name().unwrap_or_default();
+        Popover::new("epub-popover")
             .gap_3()
             .min_w(px(450.0))
             .anchor(Anchor::TopLeft)
             .trigger(
-                Button::new((self.id.clone(), "epub-trigger"))
+                Button::new("epub-trigger")
                     .label("epub")
                     .primary()
                     .outline(),
             )
-            .child(LabelButton::new(
-                (self.id.clone(), "epub-button"),
-                "epub",
-                self.epub_name().unwrap_or_default(),
-                cx.listener(Self::select_epub),
+            .child(
+                LabelButton::new("epub-button", "epub", epub, cx.listener(Self::select_epub))
+                    .disable(running),
             )
-            .disable(running))
-            .child(LabelButton::new(
-                (self.id.clone(), "glossary-button"),
-                "glossary",
-                self.glossary_name().unwrap_or_default(),
-                cx.listener(Self::select_glossary),
+            .child(
+                LabelButton::new(
+                    "glossary-button",
+                    "glossary",
+                    self.glossary_name().unwrap_or_default(),
+                    cx.listener(Self::select_glossary),
+                )
+                .disable(running),
             )
-            .disable(running))
             .child(
                 h_flex().justify_center().items_center().gap_2().children([
-                    Button::new((self.id.clone(), "save-button"))
+                    Button::new("save-button")
                         .label("save")
+                        .primary()
+                        .outline()
+                        .disabled(running)
                         .on_click(cx.listener(Self::save)),
-                    Button::new((self.id.clone(), "recover-button"))
+                    Button::new("recover-button")
                         .label("recover")
+                        .primary()
+                        .outline()
                         .disabled(running)
                         .on_click(cx.listener(Self::recover)),
                 ]),
@@ -60,37 +67,38 @@ impl Translation {
             .gap_2()
             .paddings(px(5.0))
             .child(self.epub_popover(cx))
-            .child(
-                self.server
-                    .server_popover((self.id.clone(), "server-popover"), cx),
-            )
+            .child(self.server.server_popover(cx))
             .child(self.translate_button(cx))
-            .child(self.server.model_select())
+            .child(self.server.model_select(cx))
     }
 
     pub fn translate_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.is_running() {
-            Button::new((self.id.clone(), "cancel-button"))
+            Button::new("cancel-button")
                 .label("cancel")
+                .primary()
+                .outline()
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.stop();
                     cx.notify();
                 }))
         } else {
-            Button::new((self.id.clone(), "translate-button"))
+            Button::new("translate-button")
                 .label("translate")
+                .primary()
+                .outline()
                 .disabled(!self.can_translate())
                 .on_click(cx.listener(Self::translate))
         }
     }
 
     pub fn page_side_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        Sidebar::new((self.id.clone(), "page-sidebar"))
+        Sidebar::new("page-sidebar")
             .h_full()
             .border_1()
             .rounded_md()
             .paddings(px(5.0))
-            .border_color(Hsla::white())
+            .border_color(cx.theme().primary)
             .children(self.pages.iter().enumerate().map(|(i, p)| {
                 p.sidebar_menu_item(
                     i,
@@ -101,9 +109,10 @@ impl Translation {
             }))
     }
 
-    pub fn text_box(&self) -> impl IntoElement {
+    pub fn text_box(&self, cx: &Context<Self>) -> impl IntoElement {
         let focus_handle = self.focus_handle.clone();
         let display = self.display;
+        let section_len = self.current_page().map_or_default(|p| p.sections.len());
         div()
             .size_full()
             .flex_auto()
@@ -111,13 +120,21 @@ impl Translation {
             .min_size_0()
             .rounded_md()
             .paddings(px(5.0))
-            .border_color(Hsla::white())
+            .border_color(cx.theme().primary)
             .children(self.current_page().map(|page| {
                 div()
+                    .relative()
                     .size_full()
-                    .paddings(px(5.0))
-                    .overflow_y_scrollbar()
-                    .children(page.text(display))
+                    .child(
+                        div()
+                            .id("text-scroll")
+                            .size_full()
+                            .paddings(px(5.0))
+                            .overflow_y_scroll()
+                            .track_scroll(&self.scroll_handle)
+                            .children(page.text(display, self.current_page, cx)),
+                    )
+                    .vertical_scrollbar(&self.scroll_handle)
             }))
             .context_menu(move |menu, _window, _cx| {
                 let items = [
@@ -125,12 +142,15 @@ impl Translation {
                     ("end", DisplayType::End, SetDisplay::End),
                     ("japanese", DisplayType::Japanese, SetDisplay::Japanese),
                 ];
-                items.into_iter().fold(
+                let menu = items.into_iter().fold(
                     menu.action_context(focus_handle.clone()),
                     |menu, (label, t, action)| {
                         menu.menu_with_check(label, display == t, Box::new(action))
                     },
-                )
+                );
+                (0..section_len).fold(menu, |menu, part| {
+                    menu.menu(format!("section {}", part + 1), Box::new(ScrollTo { part }))
+                })
             })
     }
 }

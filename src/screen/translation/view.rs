@@ -6,24 +6,25 @@ use gpui_kit::{
 };
 
 impl Render for Translation {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
+            .gap_2()
             .min_h_0()
+            .size_full()
+            .paddings(px(10.0))
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::save_page))
+            .on_action(cx.listener(Self::scroll_to))
             .on_action(cx.listener(Self::set_display_action))
             .on_action(cx.listener(Self::translate_action))
-            .paddings(px(10.0))
-            .size_full()
-            .gap_2()
             .child(self.menu_bar(cx))
             .child(
                 h_flex()
-                    .size_full()
-                    .min_h_0()
                     .gap_3()
+                    .min_h_0()
+                    .size_full()
                     .child(self.page_side_bar(cx))
-                    .child(self.text_box()),
+                    .child(self.text_box(cx)),
             )
     }
 }

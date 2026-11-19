@@ -25,7 +25,8 @@ pub fn reply_stream(agent: &Agent, prompt: Message) -> impl Stream<Item = Result
 fn reply(item: std::result::Result<MultiTurnStreamItem, PromptError>) -> Option<Result<Reply>> {
     match item {
         Ok(MultiTurnStreamItem::StreamAssistantItem(Item::Event(StreamEvent::Text {
-            text, ..
+            text,
+            ..
         }))) if !text.is_empty() => Some(Ok(Reply::Text(text))),
         Ok(MultiTurnStreamItem::CompletionCall(call)) if is_truncated(&call) => {
             Some(Ok(Reply::Truncated))

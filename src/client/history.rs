@@ -1,6 +1,6 @@
 use crate::{error::Result, text::remove_think_tags};
 use rig::{
-    conversation::{Author, Conversation},
+    conversation::{Author, Conversation, Entry},
     memory::{
         MemoryStore, apply_summary, load_async, save_async, summarized_prefix, summary_state,
     },
@@ -47,6 +47,20 @@ pub async fn seed_history(history: &SharedHistory, messages: Vec<Message>) -> Re
 /// Folds messages that fell out of the window into the summary before the next run.
 pub async fn compact_history(history: &SharedHistory) -> Result<()> {
     update_store(history, compact).await
+}
+
+/// How many messages the history holds, to [`rewind_history`] back to.
+pub async fn history_len(history: &SharedHistory) -> Result<usize> {
+    let conversation = load_async(&history.store, CONVERSATION_ID).await?;
+    Ok(conversation.messages().len())
+}
+
+/// Drops every message after the first `len`, such as a failed attempt's turn.
+pub async fn rewind_history(history: &SharedHistory, len: usize) -> Result<()> {
+    update_store(history, |conversation, _| {
+        conversation.splice(len.., Vec::<Entry>::new(), Author::plugin(AUTHOR));
+    })
+    .await
 }
 
 async fn update_store(
@@ -104,7 +118,10 @@ fn summarize_overflow(conversation: &mut Conversation, window: usize) {
 
     let mut state = summary_state(conversation);
     let mut summary = state.summary;
-    for line in messages[from..upto].iter().filter_map(|m| render_message(m)) {
+    for line in messages[from..upto]
+        .iter()
+        .filter_map(|m| render_message(m))
+    {
         if !summary.is_empty() {
             summary.push('\n');
         }
@@ -149,9 +166,14 @@ fn render_message(message: &Message) -> Option<String> {
 
 #[cfg(test)]
 mod test {
-    use super::{SUMMARY_MAX_BYTES, TRUNCATED, answer_only, compact, truncate_summary};
+    use super::{
+        CONVERSATION_ID, SUMMARY_MAX_BYTES, TRUNCATED, answer_only, compact, history_len,
+        rewind_history, seed_history, shared_history, truncate_summary,
+    };
+    use futures::executor::block_on;
     use rig::{
         conversation::Conversation,
+        memory::{load_async, save_async},
         message::{AssistantContent, AssistantMessage, Message},
     };
 
@@ -275,6 +297,31 @@ mod test {
             summary.contains("assistant: 195 "),
             "keeps the newest turns"
         );
+    }
+
+    #[test]
+    fn rewinding_drops_a_failed_turn() {
+        block_on(async {
+            let history = shared_history(4);
+            seed_history(&history, pairs(0..2)).await.unwrap();
+            let len = history_len(&history).await.unwrap();
+
+            // The agent saves the failed attempt's turn, as it would a good one.
+            let mut conversation = load_async(&history.store, CONVERSATION_ID).await.unwrap();
+            conversation.extend(pairs(2..3));
+            save_async(&history.store, CONVERSATION_ID, &mut conversation)
+                .await
+                .unwrap();
+
+            rewind_history(&history, len).await.unwrap();
+            let conversation = load_async(&history.store, CONVERSATION_ID).await.unwrap();
+            let kept: Vec<_> = conversation
+                .messages()
+                .iter()
+                .map(|m| (**m).clone())
+                .collect();
+            assert_eq!(kept, pairs(0..2));
+        });
     }
 
     #[test]

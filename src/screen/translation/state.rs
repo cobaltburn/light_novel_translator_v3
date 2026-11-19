@@ -1,15 +1,14 @@
 use crate::{
     client::SharedHistory,
     page::{Job, Page},
-    screen::DisplayType,
+    screen::{DisplayType, FocusHandleAccess},
     server::Server,
 };
-use gpui_kit::{Context, ElementId, FocusHandle, Window, accesskit::Uuid};
+use gpui_kit::{Context, FocusHandle, ScrollHandle, Window};
 use std::{borrow::Cow, collections::VecDeque, path::PathBuf};
 
 #[derive(Debug)]
 pub struct Translation {
-    pub id: ElementId,
     pub focus_handle: FocusHandle,
     pub server: Server,
     pub file_path: Option<PathBuf>,
@@ -19,6 +18,7 @@ pub struct Translation {
     pub display: DisplayType,
     pub pending: VecDeque<Job>,
     pub history: Option<(usize, SharedHistory)>,
+    pub scroll_handle: ScrollHandle,
 }
 
 impl Translation {
@@ -28,7 +28,6 @@ impl Translation {
 
     pub fn from_server(server: Server, cx: &mut Context<Self>) -> Self {
         Self {
-            id: Uuid::new_v4().into(),
             focus_handle: cx.focus_handle(),
             server,
             file_path: None,
@@ -38,6 +37,7 @@ impl Translation {
             pending: VecDeque::new(),
             display: DisplayType::default(),
             history: None,
+            scroll_handle: ScrollHandle::new(),
         }
     }
 
@@ -59,5 +59,11 @@ impl Translation {
 
     pub fn can_translate(&self) -> bool {
         self.server.connected() && self.file_path.is_some()
+    }
+}
+
+impl FocusHandleAccess for Translation {
+    fn focus_handle(&self) -> &FocusHandle {
+        &self.focus_handle
     }
 }

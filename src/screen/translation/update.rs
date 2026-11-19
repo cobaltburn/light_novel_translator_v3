@@ -1,6 +1,7 @@
 use crate::{
     client::{
-        Client, Reply, Settings, compact_history, is_response_report, reply_stream, seed_history,
+        Client, Reply, Settings, SharedHistory, compact_history, history_len, is_response_report,
+        reply_stream, rewind_history, seed_history,
     },
     dialogs::{
         complete_dialog, save_translation_dialog, select_epub_dialog, select_glossary_dialog,
@@ -164,7 +165,6 @@ impl Translation {
         check_all_pages(&mut self.pages);
     }
 
-    /// Translates from the current page to the end of the book.
     pub fn translate(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         let jobs = Job::run_from(self.current_page, self.pages.len());
         self.start(jobs, window, cx);
@@ -272,6 +272,13 @@ impl Translation {
         }
     }
 
+    fn clear_section(&mut self, page: usize, part: usize, cx: &mut Context<Self>) {
+        if let Some(section) = self.section_mut(page, part) {
+            section.content.clear();
+            cx.notify();
+        }
+    }
+
     fn section_mut(&mut self, page: usize, part: usize) -> Option<&mut Section> {
         self.pages.get_mut(page)?.sections.get_mut(part)
     }
@@ -339,45 +346,114 @@ async fn translate_parts(
         seed,
         parts,
     } = run;
-    if let Some(history) = &history {
-        seed_history(history, seed).await?;
+    // A history that fails to update is reported, and the run carries on.
+    if let Some(history) = &history
+        && let Err(error) = seed_history(history, seed).await
+    {
+        error.display_error("Failed to seed history", cx).await;
     }
 
     for (part, japanese) in parts {
         this.update(cx, |this, cx| {
             this.set_activity(page, Activity::Active(part + 1), cx)
         })?;
-        if let Some(history) = &history {
-            compact_history(history).await?;
+        if let Some(history) = &history
+            && let Err(error) = compact_history(history).await
+        {
+            error.display_error("Failed to compact history", cx).await;
         }
-        let result = stream_part(this, &agent, &japanese, page, part, cx).await;
+        let result =
+            translate_part(this, &agent, history.as_ref(), &japanese, page, part, cx).await;
         this.update(cx, |this, cx| this.clean_section(page, part, cx))?;
-        match result {
-            // The reply to this part was bad, but the server is fine: report it and carry on.
-            Err(error) if is_response_report(&error) => this.update_in(cx, |_, window, cx| {
-                error.prompt("Translation error", window, cx)
-            })?,
-            result => result?,
-        }
+        result?;
     }
     Ok(())
 }
 
+/// How one attempt at a part's reply ended.
+enum Attempt {
+    Complete,
+    Truncated,
+    Failed(Error),
+}
+
+/// Streams a part's translation into its section. A reply that fails or is
+/// cut off is thrown away, along with its turn in the history, and tried once more.
+async fn translate_part(
+    this: &WeakEntity<Translation>,
+    agent: &Agent,
+    history: Option<&SharedHistory>,
+    japanese: &str,
+    page: usize,
+    part: usize,
+    cx: &mut AsyncWindowContext,
+) -> Result<()> {
+    // Where the history stood before the first attempt.
+    let mark = match history {
+        Some(history) => match history_len(history).await {
+            Ok(len) => Some((history, len)),
+            Err(error) => {
+                error.display_error("Failed to read history", cx).await;
+                None
+            }
+        },
+        None => None,
+    };
+
+    let mut retried = false;
+    loop {
+        let reason = match stream_part(this, agent, japanese, page, part, retried, cx).await? {
+            Attempt::Complete => return Ok(()),
+            Attempt::Truncated if retried => return Ok(()),
+            Attempt::Failed(error) if retried => return Err(error),
+            Attempt::Truncated => "was cut off".to_string(),
+            Attempt::Failed(error) => format!("failed: {error}"),
+        };
+        log::warn!("Page {page} part {} {reason}, retrying", part + 1);
+        retried = true;
+
+        this.update(cx, |this, cx| this.clear_section(page, part, cx))?;
+        if let Some((history, len)) = mark
+            && let Err(error) = rewind_history(history, len).await
+        {
+            error.display_error("Failed to rewind history", cx).await;
+        }
+    }
+}
+
+/// Streams one attempt at a part's reply into its section. Only the `last`
+/// attempt reports a bad chunk and reads on past it; an earlier one gives up
+/// on any error, to be retried.
 async fn stream_part(
     this: &WeakEntity<Translation>,
     agent: &Agent,
     japanese: &str,
     page: usize,
     part: usize,
+    last: bool,
     cx: &mut AsyncWindowContext,
-) -> Result<()> {
+) -> Result<Attempt> {
     let mut replies = reply_stream(agent, Message::user(japanese));
+    let mut truncated = false;
     while let Some(reply) = replies.next().await {
-        if let Reply::Text(text) = reply? {
-            this.update(cx, |this, cx| this.append_content(page, part, &text, cx))?;
+        match reply {
+            Ok(Reply::Text(text)) => {
+                this.update(cx, |this, cx| this.append_content(page, part, &text, cx))?
+            }
+            Ok(Reply::Truncated) => truncated = true,
+            // A bad chunk of the reply, but the server is fine: report it, pausing
+            // the run until it's dismissed, then read the rest of the reply.
+            Err(error) if last && is_response_report(&error) => {
+                error.display_error("Translation error", cx).await
+            }
+            Err(error) => return Ok(Attempt::Failed(error)),
         }
     }
-    Ok(())
+    Ok(if truncated {
+        Attempt::Truncated
+    } else {
+        Attempt::Complete
+    })
 }
 
 impl ServerUpdate for Translation {

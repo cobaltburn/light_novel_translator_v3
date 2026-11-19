@@ -49,10 +49,6 @@ impl Page {
         self.path.file_prefix().map(|p| p.to_string_lossy())
     }
 
-    pub fn name(&self) -> String {
-        self.file_prefix().unwrap_or_default().into_owned()
-    }
-
     pub fn active(&self) -> bool {
         matches!(self.activity, Activity::Active(_))
     }

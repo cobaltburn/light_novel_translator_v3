@@ -1,7 +1,7 @@
 use crate::text::clean_invisible_chars;
 use gpui_kit::{
-    AnyElement, Div, Hsla, InteractiveElement, IntoElement, ParentElement as _, SharedString,
-    Styled as _, div, text,
+    AnyElement, App, ClickEvent, Context, Div, Hsla, InteractiveElement, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement, Styled as _, Window, div, text,
 };
 use rig::message::Message;
 use serde::{Deserialize, Serialize};
@@ -53,24 +53,39 @@ impl Section {
     }
 
     // TODO highlight japanese characters incase of error
-    pub fn content_div(&self, i: usize) -> [AnyElement; 2] {
+    pub fn content_div(
+        &self,
+        part: usize,
+        name: &str,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> [AnyElement; 2] {
         [
-            part_div(i, self.content.len()).into_any_element(),
+            part_div(name, part, self.content.len(), on_click),
             div().child(text!(self.content.clone())).into_any_element(),
         ]
     }
 
-    pub fn end_lines_div(&self, i: usize) -> [AnyElement; 2] {
+    pub fn end_lines_div(
+        &self,
+        part: usize,
+        name: &str,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> [AnyElement; 2] {
         let end_lines = self.end_lines();
         [
-            part_div(i, end_lines.len()).into_any_element(),
+            part_div(name, part, end_lines.len(), on_click),
             div().child(text!(end_lines)).into_any_element(),
         ]
     }
 
-    pub fn japanese_div(&self, i: usize) -> [AnyElement; 2] {
+    pub fn japanese_div(
+        &self,
+        part: usize,
+        name: &str,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> [AnyElement; 2] {
         [
-            part_div(i, self.japanese.len()).into_any_element(),
+            part_div(name, part, self.japanese.len(), on_click),
             div().child(text!(self.japanese.clone())).into_any_element(),
         ]
     }
@@ -84,9 +99,17 @@ impl Section {
     }
 }
 
-pub fn part_div(part: usize, count: usize) -> Div {
+pub fn part_div(
+    name: &str,
+    part: usize,
+    count: usize,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
     div()
+        .id(format!("{name}-{part}"))
         .text_color(Hsla::red())
         .hover(|s| s.underline())
-        .child(format!("\nPart: {}\nCount: {}\n", part + 1, count))
+        .child(format!("\nSection: {}\nCount: {}\n", part + 1, count))
+        .on_click(on_click)
+        .into_any_element()
 }

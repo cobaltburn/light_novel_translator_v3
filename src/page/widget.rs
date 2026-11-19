@@ -1,9 +1,10 @@
 use crate::{
     page::{Activity, Page},
-    screen::{DisplayType, SavePage, Translate},
+    screen::{DisplayType, SavePage, Translate, Translation},
 };
 use gpui_kit::{
-    App, ClickEvent, Div, FocusHandle, Hsla, IntoElement, ParentElement as _, Styled, Window,
+    App, ClickEvent, Context, Div, FocusHandle, Hsla, IntoElement, ParentElement as _, Styled,
+    Window,
     assets::IconName,
     base::h_flex,
     component::{Icon, sidebar::SidebarMenuItem},
@@ -45,19 +46,35 @@ impl Page {
             .suffix(move |_, _| sidebar_icon(activity))
     }
 
-    pub fn text(&self, display: DisplayType) -> impl Iterator<Item = impl IntoElement> {
+    pub fn text(
+        &self,
+        display: DisplayType,
+        page: usize,
+        cx: &Context<Translation>,
+    ) -> impl Iterator<Item = impl IntoElement> {
+        let name = self
+            .path
+            .file_name()
+            .map_or_default(|e| e.to_string_lossy());
+
+        let on_click = move |part| {
+            cx.listener(move |this, _, window, cx| {
+                this.translate_action(&Translate::Part { page, part }, window, cx)
+            })
+        };
+
         self.sections
             .iter()
             .enumerate()
             .map(move |(i, s)| match display {
-                DisplayType::Full => s.content_div(i),
-                DisplayType::End => s.end_lines_div(i),
-                DisplayType::Japanese => s.japanese_div(i),
+                DisplayType::Full => s.content_div(i, &name, on_click(i)),
+                DisplayType::End => s.end_lines_div(i, &name, on_click(i)),
+                DisplayType::Japanese => s.japanese_div(i, &name, on_click(i)),
             })
             .flatten()
     }
 
-    /* pub fn error_cards(&self) -> impl IntoElement {
+    /* pub fn error_cards(&self, cx: &mut Context<Self>) -> impl IntoElement {
         todo!()
     } */
 }

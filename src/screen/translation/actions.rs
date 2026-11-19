@@ -20,6 +20,12 @@ pub struct SavePage {
 
 #[derive(Clone, PartialEq, Debug, Action)]
 #[action(namespace = translation, no_json)]
+pub struct ScrollTo {
+    pub part: usize,
+}
+
+#[derive(Clone, PartialEq, Debug, Action)]
+#[action(namespace = translation, no_json)]
 pub enum Translate {
     All(usize),
     Page(usize),
@@ -46,6 +52,11 @@ impl Translation {
             return;
         };
         // TODO: save `_page`.
+    }
+
+    pub fn scroll_to(&mut self, action: &ScrollTo, _: &mut Window, cx: &mut Context<Self>) {
+        self.scroll_handle.scroll_to_top_of_item(action.part * 2);
+        cx.notify();
     }
 
     pub fn translate_action(

@@ -70,9 +70,9 @@ impl Server {
             .ok_or(Error::Error("No such part"))?;
         let recent = before.iter().rev().chain(newest_first(pages));
         let (seed, history) = self.seeded_history(recent);
-        let agent = self
-            .client
-            .translation_agent(model, &self.settings, history.clone(), glossary)?;
+        let agent =
+            self.client
+                .translation_agent(model, &self.settings, history.clone(), glossary)?;
 
         Ok(TranslationRun {
             agent,
