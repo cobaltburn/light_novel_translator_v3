@@ -1,7 +1,7 @@
 use crate::{
     client::{Client, Settings},
     error::{Error, Result},
-    server::{Method, ServerBuilder, ServerUpdate},
+    server::{Method, ServerBuilder, ServerUpdate, SettingsInputs},
 };
 use gpui_kit::{Context, Entity, Task, Window, component::select::SelectState};
 
@@ -11,6 +11,7 @@ pub struct Server {
     pub models: Entity<SelectState<Vec<String>>>,
     pub handles: Vec<Task<Result<()>>>,
     pub settings: Settings,
+    pub inputs: SettingsInputs,
     pub method: Method,
 }
 
@@ -26,11 +27,7 @@ impl Server {
     pub fn builder(&self) -> ServerBuilder {
         ServerBuilder {
             client: self.client.clone(),
-            think: self.settings.think,
-            context_window: self.settings.context_window.0,
-            temperature: self.settings.temperature.0,
-            top_p: self.settings.top_p.0,
-            repeat_penalty: self.settings.repeat_penalty.0,
+            settings: self.settings,
             method: self.method,
         }
     }

@@ -1,15 +1,42 @@
-use crate::screen::format::Format;
+use crate::{
+    screen::format::Format,
+    widget::{LabelButton, PrimaryBorder as _, primary_button},
+};
 use gpui_kit::{
-    Context, IntoElement, ObjectFit, ParentElement, Styled, StyledImage,
+    Context, Div, IntoElement, ObjectFit, ParentElement, Styled, StyledImage,
     base::{h_flex, v_flex},
-    component::{
-        ActiveTheme,
-        button::{Button, ButtonVariants},
-    },
     div, img, text,
 };
 
 impl Format {
+    /// The source epub, and its cover.
+    pub fn epub_column(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        source_column(
+            LabelButton::new(
+                "epub-label-button",
+                "epub",
+                self.epub_name().unwrap_or_default(),
+                cx.listener(|this, _, window, cx| this.select_epub(window, cx)),
+            ),
+            self.cover_image(cx),
+        )
+    }
+
+    /// The folder of translated pages, and the pages in it.
+    pub fn content_column(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        source_column(
+            LabelButton::new(
+                "content-label-button",
+                "content",
+                self.source_folder.as_ref().map_or_default(|s| s.as_str()),
+                cx.listener(|this, _, window, cx| {
+                    this.select_folder(window, cx);
+                }),
+            ),
+            self.content_files(cx),
+        )
+    }
+
     pub fn cover_image(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
@@ -18,8 +45,7 @@ impl Format {
             .items_center()
             .justify_center()
             .rounded_sm()
-            .border_1()
-            .border_color(cx.theme().primary)
+            .primary_border(cx)
             .children(self.cover.as_ref().map(|image| {
                 img(image.clone())
                     .absolute()
@@ -33,8 +59,7 @@ impl Format {
         v_flex()
             .size_full()
             .rounded_sm()
-            .border_1()
-            .border_color(cx.theme().primary)
+            .primary_border(cx)
             .children(
                 self.pages
                     .iter()
@@ -45,12 +70,20 @@ impl Format {
 
     pub fn build_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex().w_full().justify_end().child(
-            Button::new("build-button")
-                .primary()
-                .outline()
+            primary_button("build-button", "build")
                 .flex()
-                .label("build")
                 .on_click(cx.listener(|this, _, window, cx| this.build_epub(window, cx))),
         )
     }
+}
+
+/// Half of the screen: a picker for one source over a panel showing what was picked.
+fn source_column(picker: LabelButton, panel: impl IntoElement) -> Div {
+    v_flex()
+        .gap_3()
+        .h_full()
+        .w_1_2()
+        .min_size_0()
+        .child(picker)
+        .child(panel)
 }

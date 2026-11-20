@@ -1,12 +1,10 @@
 use crate::text::clean_invisible_chars;
-use gpui_kit::{
-    App, ClickEvent, Div, Hsla, InteractiveElement, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement, Styled as _, Window, div, px, text,
-};
+use gpui_kit::SharedString;
 use rig::message::Message;
 use serde::{Deserialize, Serialize};
 
 const SECTION_CAPACITY: usize = 8 * 1024;
+const END_LINES: usize = 10;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Section {
@@ -52,63 +50,12 @@ impl Section {
         self.content = text.join("\n")
     }
 
-    // TODO highlight japanese characters incase of error
-    pub fn content_div(
-        &self,
-        part: usize,
-        name: &str,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Div {
-        div()
-            .child(part_div(name, part, self.content.len(), on_click))
-            .child(text!(self.content.clone()))
-    }
-
-    pub fn end_lines_div(
-        &self,
-        part: usize,
-        name: &str,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Div {
-        let end_lines = self.end_lines();
-        div()
-            .child(part_div(name, part, end_lines.len(), on_click))
-            .child(text!(end_lines))
-    }
-
-    pub fn japanese_div(
-        &self,
-        part: usize,
-        name: &str,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Div {
-        div()
-            .child(part_div(name, part, self.japanese.len(), on_click))
-            .child(text!(self.japanese.clone()))
-    }
-
-    fn end_lines(&self) -> String {
+    /// The last lines of the translation, to check where it stopped.
+    pub fn end_lines(&self) -> String {
         let lines: Vec<_> = self.content.lines().collect();
         lines
-            .get(lines.len().saturating_sub(10)..)
+            .get(lines.len().saturating_sub(END_LINES)..)
             .unwrap_or_default()
             .join("\n")
     }
-}
-
-pub fn part_div(
-    name: &str,
-    part: usize,
-    count: usize,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(format!("{name}-{part}"))
-        .min_size_0()
-        .max_w(px(120.0))
-        .py_3()
-        .text_color(Hsla::red())
-        .hover(|s| s.underline())
-        .child(format!("Section: {}\nCount: {}", part + 1, count))
-        .on_click(on_click)
 }

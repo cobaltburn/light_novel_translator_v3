@@ -1,8 +1,9 @@
 use crate::{
     client::SharedHistory,
+    error::{Error, Result},
     page::{Job, Page},
-    screen::DisplayType,
     server::Server,
+    widget::page::DisplayType,
 };
 use gpui_kit::{App, Context, FocusHandle, Focusable, ScrollHandle, Window};
 use std::{borrow::Cow, collections::VecDeque, path::PathBuf};
@@ -45,12 +46,23 @@ impl Translation {
         self.pages.get(self.current_page)
     }
 
+    /// Every page up to and including `page`, the context its translation continues.
+    pub fn pages_through(&self, page: usize) -> Result<&[Page]> {
+        self.pages.get(..=page).ok_or(Error::Error("No such page"))
+    }
+
     pub fn epub_name(&self) -> Option<Cow<'_, str>> {
         Some(self.file_path.as_ref()?.file_name()?.to_string_lossy())
     }
 
     pub fn glossary_name(&self) -> Option<Cow<'_, str>> {
         Some(self.glossary.as_ref()?.0.file_name()?.to_string_lossy())
+    }
+
+    pub fn glossary_text(&self) -> Option<&str> {
+        self.glossary
+            .as_ref()
+            .map(|(_, glossary)| glossary.as_str())
     }
 
     pub fn is_running(&self) -> bool {

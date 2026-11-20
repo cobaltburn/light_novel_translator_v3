@@ -1,5 +1,6 @@
 use crate::{
     epub::{
+        EpubMetadata, FormatPage,
         chapter::{build_html, parse_headers},
         html::{parse_links, update_image_paths, update_resource_paths},
         resources::{CSS_MIME, PageLinks, ResourcePaths, strip_jp_layout},
@@ -24,30 +25,22 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[non_exhaustive]
-#[derive(Default, Debug)]
-pub struct FormatPage {
-    pub path: PathBuf,
-    pub content: String,
-}
-
-impl From<(PathBuf, String)> for FormatPage {
-    fn from((path, content): (PathBuf, String)) -> Self {
-        FormatPage { path, content }
-    }
-}
-
-#[non_exhaustive]
-#[derive(Default, Debug)]
-pub struct EpubMetadata {
-    pub title: String,
-    pub authors: String,
-}
-
+/// A toc entry of the source epub, with its translated title if the toc page has one.
 #[derive(Debug)]
 pub struct TocLink {
     pub path: String,
     pub title: Option<String>,
+}
+
+/// A page of the source's spine.
+struct SpineFile {
+    /// Where the page goes in the output epub.
+    href: PathBuf,
+    /// The translated markdown file that pairs with it.
+    md_file: PathBuf,
+    /// Its path in the source epub, for resolving its links.
+    source: String,
+    html: String,
 }
 
 #[derive(Debug)]
@@ -165,21 +158,7 @@ impl DocBuilder {
     }
 
     pub fn add_chapters(&mut self, paths: &ResourcePaths) -> Result<()> {
-        let epub_paths = get_ordered_path(&self.epub);
-        let path_map = self.path_map();
-
-        let file_parts: Vec<_> = epub_paths
-            .iter()
-            .filter_map(|path| link_files(path, &path_map))
-            .map(|(md_file, entry)| {
-                let html = entry.read_str()?;
-                let path = Path::new(entry.href().path().as_str());
-                let href = to_text_path(path)?;
-                let source = entry.href().path().decode().into_owned();
-                Ok((href, md_file, source, html))
-            })
-            .collect::<Result<_>>()?;
-
+        let files = self.spine_files()?;
         let mut chapters = self.chapters();
         let toc_ids = self.toc_ids();
 
@@ -192,13 +171,14 @@ impl DocBuilder {
         let mut contents = Vec::new();
 
         let mut chapter_count = 0;
-        for (page, (href, md_file, source, html)) in file_parts.into_iter().enumerate() {
-            let md_name = md_file.file_name().unwrap_or_default();
+        for (page, file) in files.into_iter().enumerate() {
+            let md_name = file.md_file.file_name().unwrap_or_default();
             let links = PageLinks {
-                page: &source,
+                page: &file.source,
                 paths,
             };
-            let file_name = href
+            let file_name = file
+                .href
                 .file_name()
                 .ok_or(Error::BuildError("Invalid file name found"))?
                 .to_string_lossy();
@@ -208,40 +188,50 @@ impl DocBuilder {
                     let titles = chapters
                         .get(file_name.as_ref())
                         .map_or_default(|links| translated_titles(links));
-                    build_html(&html, content, &toc_ids, &titles, links, page)?
+                    build_html(&file.html, content, &toc_ids, &titles, links, page)?
                 }
                 None => {
-                    let html = update_image_paths(&html, links)?;
+                    let html = update_image_paths(&file.html, links)?;
                     update_resource_paths(&html, links)?
                 }
             };
 
-            let href = href.to_string_lossy();
-
-            let mut sub_chapters = parse_headers(&html)?;
-            contents.push(EpubChapter::unlisted(href).xhtml(html));
-            let Some(links) = chapters.remove(file_name.as_ref()) else {
-                contents.extend(sub_chapters.remove("").unwrap_or_default().into_iter().map(
-                    |(id, title)| EpubChapter::new(title).href(format!("Text/{file_name}#{id}")),
-                ));
-                continue;
-            };
-
-            for TocLink { path, title } in links {
-                chapter_count += 1;
-                let title = title.unwrap_or(format!("Chapter {}", chapter_count));
-                contents.push(EpubChapter::new(title).href(format!("Text/{path}")));
-                let fragment = path.rsplit_once('#').map_or_default(|(_, f)| f);
-                let sub_chapters = sub_chapters.remove(fragment).unwrap_or_default();
-                contents.extend(sub_chapters.into_iter().map(|(id, title)| {
-                    EpubChapter::new(title).href(format!("Text/{file_name}#{id}"))
-                }));
-            }
+            let headings = parse_headers(&html)?;
+            contents.push(EpubChapter::unlisted(file.href.to_string_lossy()).xhtml(html));
+            contents.extend(toc_entries(
+                &file_name,
+                chapters.remove(file_name.as_ref()),
+                headings,
+                &mut chapter_count,
+            ));
         }
 
         self.builder.edit().chapter(contents);
 
         Ok(())
+    }
+
+    /// The source's spine pages, in reading order, each with the translated page it pairs with.
+    fn spine_files(&self) -> Result<Vec<SpineFile>> {
+        let epub_paths = get_ordered_path(&self.epub);
+        let path_map = self.path_map();
+
+        epub_paths
+            .iter()
+            .filter_map(|path| link_files(path, &path_map))
+            .map(|(md_file, entry)| {
+                let html = entry.read_str()?;
+                let path = Path::new(entry.href().path().as_str());
+                let href = to_text_path(path)?;
+                let source = entry.href().path().decode().into_owned();
+                Ok(SpineFile {
+                    href,
+                    md_file,
+                    source,
+                    html,
+                })
+            })
+            .collect()
     }
 
     pub fn path_map(&self) -> HashMap<String, EpubManifestEntry<'_>> {
@@ -369,4 +359,35 @@ fn translated_titles(links: &[TocLink]) -> HashMap<String, String> {
             Some((fragment.to_string(), link.title.clone()?))
         })
         .collect()
+}
+
+/// The toc entries of a page: each of its toc links, numbered when untitled,
+/// followed by the headings under it. A page missing from the toc lists only
+/// its own headings.
+fn toc_entries(
+    file_name: &str,
+    links: Option<Vec<TocLink>>,
+    mut headings: HashMap<String, Vec<(String, String)>>,
+    chapter_count: &mut usize,
+) -> Vec<EpubChapter> {
+    let heading_entries = |headings: Option<Vec<(String, String)>>| {
+        headings
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(id, title)| EpubChapter::new(title).href(format!("Text/{file_name}#{id}")))
+    };
+
+    let Some(links) = links else {
+        return heading_entries(headings.remove("")).collect();
+    };
+
+    let mut entries = Vec::new();
+    for TocLink { path, title } in links {
+        *chapter_count += 1;
+        let title = title.unwrap_or(format!("Chapter {}", chapter_count));
+        entries.push(EpubChapter::new(title).href(format!("Text/{path}")));
+        let fragment = path.rsplit_once('#').map_or_default(|(_, f)| f);
+        entries.extend(heading_entries(headings.remove(fragment)));
+    }
+    entries
 }

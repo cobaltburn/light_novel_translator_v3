@@ -1,9 +1,8 @@
-use crate::widget::ListnerFn;
+use crate::widget::{ListnerFn, primary_button};
 use gpui_kit::{
     App, ClickEvent, ElementId, Hsla, IntoElement, ParentElement as _, RenderOnce, SharedString,
     Styled, Window,
     base::{Disableable, h_flex},
-    component::button::{Button, ButtonVariants as _},
     div, text,
 };
 
@@ -47,10 +46,7 @@ impl RenderOnce for LabelButton {
             .gap_2()
             .w_full()
             .child(
-                Button::new(self.id)
-                    .label(self.label)
-                    .primary()
-                    .outline()
+                primary_button(self.id, self.label)
                     .disabled(self.disable)
                     .on_click(self.on_click),
             )

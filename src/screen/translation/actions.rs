@@ -2,17 +2,14 @@ use crate::{
     dialogs::save_file,
     error::{Error, TaskExt as _},
     page::{Job, page_markdown},
-    screen::{DisplayType, Translation},
+    screen::Translation,
+    widget::page::{DisplayType, PageAction, SidebarAction},
 };
 use gpui_kit::{Action, AppContext, Context, Window};
 
 #[derive(Clone, PartialEq, Debug, Action)]
 #[action(namespace = translation, no_json)]
-pub enum SetDisplay {
-    Full,
-    End,
-    Japanese,
-}
+pub struct SetDisplay(pub DisplayType);
 
 #[derive(Clone, PartialEq, Debug, Action)]
 #[action(namespace = translation, no_json)]
@@ -41,11 +38,7 @@ impl Translation {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.display = match action {
-            SetDisplay::Full => DisplayType::Full,
-            SetDisplay::End => DisplayType::End,
-            SetDisplay::Japanese => DisplayType::Japanese,
-        };
+        self.display = action.0;
         cx.notify();
     }
 
@@ -84,5 +77,40 @@ impl Translation {
             Translate::Part { page, part } => vec![Job::Part { page, part }],
         };
         self.start(jobs, window, cx);
+    }
+}
+
+impl PageAction for Translation {
+    fn start_section(
+        &mut self,
+        page: usize,
+        part: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.translate_action(&Translate::Part { page, part }, window, cx);
+    }
+}
+
+impl SidebarAction for Translation {
+    fn save_action(page: usize) -> Box<dyn Action> {
+        Box::new(SavePage { page })
+    }
+
+    fn all_action(page: usize) -> Box<dyn Action> {
+        Box::new(Translate::All(page))
+    }
+
+    fn page_action(page: usize) -> Box<dyn Action> {
+        Box::new(Translate::Page(page))
+    }
+
+    fn section_action(page: usize, part: usize) -> Box<dyn Action> {
+        Box::new(Translate::Part { page, part })
+    }
+
+    fn set_page(&mut self, page: usize, cx: &mut Context<Self>) {
+        self.current_page = page;
+        cx.notify();
     }
 }

@@ -61,7 +61,7 @@ impl Client {
         let builder = self
             .agent_builder(model)?
             .preamble(TRANSLATION_PROMPT)
-            .temperature(settings.temperature.0)
+            .temperature(settings.temperature)
             .additional_params(settings.agent_params());
         let builder = match history {
             Some(history) => builder.memory(history.store).conversation(CONVERSATION_ID),
@@ -78,7 +78,7 @@ impl Client {
         Ok(self
             .agent_builder(model)?
             .preamble(GLOSSARY_PROMPT)
-            .temperature(settings.temperature.0)
+            .temperature(settings.temperature)
             .additional_params(settings.agent_params())
             .build())
     }

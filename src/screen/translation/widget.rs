@@ -1,15 +1,17 @@
 use crate::{
-    screen::{DisplayType, ScrollTo, SetDisplay, Translation},
-    widget::LabelButton,
+    page::Page,
+    screen::{ScrollTo, SetDisplay, Translation},
+    widget::{
+        LabelButton, PrimaryBorder as _, action_menu, numbered_items, page::DisplayType,
+        primary_button,
+    },
 };
 use gpui_kit::{
     Anchor, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _,
+    StatefulInteractiveElement as _, Styled as _, Window,
     base::{Disableable, StyledExt as _, h_flex},
     component::{
-        ActiveTheme,
-        button::{Button, ButtonVariants},
-        menu::ContextMenuExt,
+        menu::{ContextMenuExt, PopupMenu},
         popover::Popover,
         scroll::ScrollableElement,
         sidebar::Sidebar,
@@ -18,6 +20,15 @@ use gpui_kit::{
 };
 
 impl Translation {
+    pub fn menu_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
+            .gap_2()
+            .child(self.epub_popover(cx))
+            .child(self.server.server_popover(cx))
+            .child(self.translate_button(cx))
+            .child(self.server.model_select(cx))
+    }
+
     pub fn epub_popover(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let running = self.is_running();
         let epub = self.epub_name().unwrap_or_default();
@@ -25,12 +36,7 @@ impl Translation {
             .gap_3()
             .min_w(px(450.0))
             .anchor(Anchor::TopLeft)
-            .trigger(
-                Button::new("epub-trigger")
-                    .label("epub")
-                    .primary()
-                    .outline(),
-            )
+            .trigger(primary_button("epub-trigger", "epub"))
             .child(
                 LabelButton::new("epub-button", "epub", epub, cx.listener(Self::select_epub))
                     .disable(running),
@@ -46,46 +52,24 @@ impl Translation {
             )
             .child(
                 h_flex().justify_center().items_center().gap_2().children([
-                    Button::new("save-button")
-                        .label("save")
-                        .primary()
-                        .outline()
+                    primary_button("save-button", "save")
                         .disabled(running)
                         .on_click(cx.listener(Self::save)),
-                    Button::new("recover-button")
-                        .label("recover")
-                        .primary()
-                        .outline()
+                    primary_button("recover-button", "recover")
                         .disabled(running)
                         .on_click(cx.listener(Self::recover)),
                 ]),
             )
     }
 
-    pub fn menu_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .gap_2()
-            .child(self.epub_popover(cx))
-            .child(self.server.server_popover(cx))
-            .child(self.translate_button(cx))
-            .child(self.server.model_select(cx))
-    }
-
     pub fn translate_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.is_running() {
-            Button::new("cancel-button")
-                .label("cancel")
-                .primary()
-                .outline()
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.stop();
-                    cx.notify();
-                }))
+            primary_button("cancel-button", "cancel").on_click(cx.listener(|this, _, _, cx| {
+                this.stop();
+                cx.notify();
+            }))
         } else {
-            Button::new("translate-button")
-                .label("translate")
-                .primary()
-                .outline()
+            primary_button("translate-button", "translate")
                 .disabled(!self.can_translate())
                 .on_click(cx.listener(Self::translate))
         }
@@ -94,61 +78,62 @@ impl Translation {
     pub fn page_side_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         Sidebar::new("page-sidebar")
             .h_full()
-            .border_1()
             .rounded_md()
-            .border_color(cx.theme().primary)
+            .primary_border(cx)
             .children(
                 self.pages
                     .iter()
                     .enumerate()
-                    .map(|(i, p)| p.sidebar_menu_item(i, self.current_page == i, cx)),
+                    .map(|(i, p)| p.sidebar_menu_item(i, self.current_page == i, self, cx)),
             )
     }
 
     pub fn text_box(&self, cx: &Context<Self>) -> impl IntoElement {
-        let focus_handle = self.focus_handle.clone();
-        let display = self.display;
-        let section_len = self.current_page().map_or_default(|p| p.sections.len());
         div()
             .size_full()
             .flex_auto()
-            .border_1()
             .min_size_0()
             .rounded_md()
-            .border_color(cx.theme().primary)
-            .children(self.current_page().map(|page| {
-                div()
-                    .relative()
-                    .size_full()
-                    .child(
-                        div()
-                            .id("text-scroll")
-                            .size_full()
-                            .paddings(px(5.0))
-                            .overflow_y_scroll()
-                            .track_scroll(&self.scroll_handle)
-                            .children(page.text(display, self.current_page, cx)),
-                    )
-                    .vertical_scrollbar(&self.scroll_handle)
-                    .child(page.error_cards(cx))
-            }))
-            .context_menu(move |menu, _window, _cx| {
-                let items = [
-                    ("full", DisplayType::Full, SetDisplay::Full),
-                    ("end", DisplayType::End, SetDisplay::End),
-                    ("japanese", DisplayType::Japanese, SetDisplay::Japanese),
-                ];
+            .primary_border(cx)
+            .children(self.current_page().map(|page| self.page_text(page, cx)))
+            .context_menu(self.text_menu())
+    }
 
-                let menu = menu.scrollable(true).max_h(300.0).min_w(200.0).separator();
-                let menu = items.into_iter().fold(
-                    menu.action_context(focus_handle.clone()),
-                    |menu, (label, t, action)| {
-                        menu.menu_with_check(label, display == t, Box::new(action))
-                    },
-                );
-                (0..section_len).fold(menu, |menu, part| {
-                    menu.menu(format!("section {}", part + 1), Box::new(ScrollTo { part }))
-                })
+    /// The scrolling text of `page`, with its error cards floating over it.
+    fn page_text(&self, page: &Page, cx: &Context<Self>) -> impl IntoElement {
+        div()
+            .relative()
+            .size_full()
+            .child(
+                div()
+                    .id("text-scroll")
+                    .size_full()
+                    .paddings(px(5.0))
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll_handle)
+                    .children(page.text(self.display, self.current_page, cx)),
+            )
+            .vertical_scrollbar(&self.scroll_handle)
+            .child(page.error_cards(cx))
+    }
+
+    /// The text box's context menu: how to display the text, and where to scroll.
+    fn text_menu(
+        &self,
+    ) -> impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu>) -> PopupMenu + 'static {
+        let focus_handle = self.focus_handle.clone();
+        let display = self.display;
+        let sections = self.current_page().map_or_default(|p| p.sections.len());
+        move |menu, _, _| {
+            let menu = DisplayType::ALL.into_iter().fold(
+                action_menu(menu, focus_handle.clone()).separator(),
+                |menu, item| {
+                    menu.menu_with_check(item.label(), display == item, Box::new(SetDisplay(item)))
+                },
+            );
+            numbered_items(menu, sections, "section", |part| {
+                Box::new(ScrollTo { part })
             })
+        }
     }
 }

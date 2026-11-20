@@ -91,7 +91,7 @@ impl Server {
         if self.method != Method::History {
             return (Vec::new(), None);
         }
-        let context_window = self.settings.context_window.0;
+        let context_window = self.settings.context_window;
         let messages = build_history(recent, context_window);
         (messages, Some(shared_history(context_window)))
     }
