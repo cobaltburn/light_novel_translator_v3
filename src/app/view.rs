@@ -8,14 +8,9 @@ use gpui_kit::{
 
 impl Render for Translator {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let screens = [
-            Screen::Translation,
-            Screen::Glossary,
-            Screen::Build,
-            Screen::Doc,
-        ];
+        let screens = [Screen::Translation, Screen::Glossary, Screen::Build];
         h_flex()
-            .min_size_0()
+            // .min_size_0()
             .size_full()
             .child(Sidebar::new("navigation-sidebar").w(px(150.0)).children(
                 screens.into_iter().map(|screen| {
@@ -27,10 +22,9 @@ impl Render for Translator {
                 }),
             ))
             .child(match self.screen {
-                Screen::Translation => self.translation_view(window, cx),
+                Screen::Translation => self.translation_view(window, cx).into_any_element(),
+                Screen::Build => self.format.clone().into_any_element(),
                 Screen::Glossary => todo!(),
-                Screen::Build => todo!(),
-                Screen::Doc => todo!(),
             })
     }
 }

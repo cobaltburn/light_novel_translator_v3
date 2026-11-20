@@ -1,10 +1,10 @@
 use crate::{
     client::SharedHistory,
     page::{Job, Page},
-    screen::{DisplayType, FocusHandleAccess},
+    screen::DisplayType,
     server::Server,
 };
-use gpui_kit::{Context, FocusHandle, ScrollHandle, Window};
+use gpui_kit::{App, Context, FocusHandle, Focusable, ScrollHandle, Window};
 use std::{borrow::Cow, collections::VecDeque, path::PathBuf};
 
 #[derive(Debug)]
@@ -62,8 +62,8 @@ impl Translation {
     }
 }
 
-impl FocusHandleAccess for Translation {
-    fn focus_handle(&self) -> &FocusHandle {
-        &self.focus_handle
+impl Focusable for Translation {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus_handle.clone()
     }
 }

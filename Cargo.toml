@@ -8,6 +8,7 @@ fast_html2md = "0.0.63"
 futures = "0.3.34"
 gpui-kit = "0.10.0"
 log = { version = "0.4.35", features = ["max_level_debug"] }
+mime_guess = "2.0.5"
 percent-encoding = "2.3.2"
 phf = { version = "0.14.0", features = ["macros"] }
 pulldown-cmark = "0.13.6"

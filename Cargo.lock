@@ -6010,6 +6010,7 @@ dependencies = [
  "futures",
  "gpui-kit",
  "log",
+ "mime_guess",
  "percent-encoding",
  "phf 0.14.0",
  "pulldown-cmark",

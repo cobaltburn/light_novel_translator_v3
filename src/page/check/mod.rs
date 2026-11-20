@@ -16,6 +16,7 @@ const MAX_PERCENT: f64 = 110.0;
 const SIZE_TOLERANCE: f64 = 12.5;
 const SMALL_SECTION: usize = 1000;
 
+// TODO add check for if original japanese contains bullets points and content matches
 impl Page {
     pub fn check_incomplete(&self) -> bool {
         self.sections.iter().any(|e| e.content.is_empty())

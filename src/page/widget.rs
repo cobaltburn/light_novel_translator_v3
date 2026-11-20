@@ -3,8 +3,8 @@ use crate::{
     screen::{DisplayType, SavePage, Translate, Translation},
 };
 use gpui_kit::{
-    App, ClickEvent, Context, Div, FocusHandle, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, Styled, Window,
+    Action, App, ClickEvent, Context, Div, FocusHandle, Focusable, Hsla, InteractiveElement as _,
+    IntoElement, ParentElement as _, Styled, Window,
     assets::IconName,
     base::{h_flex, v_flex},
     component::{
@@ -12,23 +12,40 @@ use gpui_kit::{
         button::{Button, ButtonVariants as _},
         sidebar::SidebarMenuItem,
     },
-    div,
+    div, px,
 };
 
+pub trait PageAction: Sized + 'static {
+    fn start_section(
+        &mut self,
+        page: usize,
+        part: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    );
+}
+
+pub trait SidebarAction: Focusable + Sized + 'static {
+    fn all_action(page: usize) -> Box<dyn Action>;
+    fn page_action(page: usize) -> Box<dyn Action>;
+    fn section_action(page: usize, part: usize) -> Box<dyn Action>;
+    fn set_page(&mut self, page: usize, cx: &mut Context<Self>);
+}
+
 impl Page {
-    pub fn sidebar_menu_item(
+    pub fn sidebar_menu_item<T: SidebarAction>(
         &self,
         page: usize,
         active: bool,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-        focus_handle: FocusHandle,
+        cx: &Context<T>,
     ) -> SidebarMenuItem {
+        let focus_handle = cx.focus_handle();
         let file_stem = self.file_stem().unwrap_or_default();
         let activity = self.activity;
         let sections = self.sections.len();
         SidebarMenuItem::new(format!("{}. {}", page, file_stem))
             .active(active)
-            .on_click(on_click)
+            .on_click(cx.listener(move |this, _, _, cx| this.set_page(page, cx)))
             .context_menu(move |menu, _, _| {
                 let menu = menu
                     .scrollable(true)
@@ -37,24 +54,24 @@ impl Page {
                     .action_context(focus_handle.clone())
                     .menu("save", Box::new(SavePage { page }))
                     .separator()
-                    .menu("translate", Box::new(Translate::All(page)))
-                    .menu("translate page", Box::new(Translate::Page(page)))
+                    .menu("translate", T::all_action(page))
+                    .menu("translate page", T::page_action(page))
                     .separator();
                 (0..sections).fold(menu, |menu, part| {
                     menu.menu(
                         format!("translate part {}", part + 1),
-                        Box::new(Translate::Part { page, part }),
+                        T::section_action(page, part),
                     )
                 })
             })
             .suffix(move |_, _| sidebar_icon(activity))
     }
 
-    pub fn text(
+    pub fn text<T: PageAction>(
         &self,
         display: DisplayType,
         page: usize,
-        cx: &Context<Translation>,
+        cx: &Context<T>,
     ) -> impl Iterator<Item = impl IntoElement> {
         let name = self
             .path
@@ -62,9 +79,7 @@ impl Page {
             .map_or_default(|e| e.to_string_lossy());
 
         let on_click = move |part| {
-            cx.listener(move |this, _, window, cx| {
-                this.translate_action(&Translate::Part { page, part }, window, cx)
-            })
+            cx.listener(move |this, _, window, cx| this.start_section(page, part, window, cx))
         };
 
         self.sections
@@ -75,7 +90,6 @@ impl Page {
                 DisplayType::End => s.end_lines_div(i, &name, on_click(i)),
                 DisplayType::Japanese => s.japanese_div(i, &name, on_click(i)),
             })
-            .flatten()
     }
 
     pub fn error_cards(&self, cx: &Context<Translation>) -> impl IntoElement {
@@ -98,14 +112,16 @@ impl Page {
             .map(make_empty_button);
 
         v_flex()
-            .absolute()
+            .p_1()
+            .gap_1()
             .top_2()
             .right_4()
-            .gap_1()
-            .p_1()
-            .rounded_md()
-            .bg(cx.theme().popover)
             .occlude()
+            .absolute()
+            .rounded_md()
+            .min_h_0()
+            .max_h(px(300.0))
+            .bg(cx.theme().popover)
             .children(empty_buttons.chain(error_buttons))
     }
 }

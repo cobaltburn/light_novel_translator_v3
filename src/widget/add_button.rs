@@ -1,3 +1,4 @@
+use crate::widget::ListnerFn;
 use gpui_kit::{
     App, ClickEvent, ElementId, IntoElement, RenderOnce, Window,
     assets::IconName,
@@ -10,7 +11,7 @@ use gpui_kit::{
 #[derive(IntoElement)]
 pub struct AddButton {
     pub id: ElementId,
-    pub on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
+    pub on_click: Box<ListnerFn>,
 }
 
 impl AddButton {

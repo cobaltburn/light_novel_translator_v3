@@ -1,8 +1,10 @@
 use crate::{
-    page::Job,
+    dialogs::save_file,
+    error::{Error, TaskExt as _},
+    page::{Job, page_markdown},
     screen::{DisplayType, Translation},
 };
-use gpui_kit::{Action, Context, Window};
+use gpui_kit::{Action, AppContext, Context, Window};
 
 #[derive(Clone, PartialEq, Debug, Action)]
 #[action(namespace = translation, no_json)]
@@ -47,15 +49,26 @@ impl Translation {
         cx.notify();
     }
 
-    pub fn save_page(&mut self, action: &SavePage, _: &mut Window, _cx: &mut Context<Self>) {
-        let Some(_page) = self.pages.get(action.page) else {
-            return;
+    pub fn save_page(&mut self, action: &SavePage, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(page) = self.pages.get(action.page) {
+            let page = page.clone();
+            cx.background_spawn(async move {
+                let Some(name) = page.file_stem() else {
+                    return Ok(());
+                };
+
+                if let Some(handle) = save_file(format!("{name}.md")).await {
+                    let content = page_markdown(&page);
+                    handle.write(content.as_ref()).await?;
+                }
+                Ok::<_, Error>(())
+            })
+            .detach_and_prompt_err("Failed to save page", window, cx);
         };
-        // TODO: save `_page`.
     }
 
     pub fn scroll_to(&mut self, action: &ScrollTo, _: &mut Window, cx: &mut Context<Self>) {
-        self.scroll_handle.scroll_to_top_of_item(action.part * 2);
+        self.scroll_handle.scroll_to_top_of_item(action.part);
         cx.notify();
     }
 

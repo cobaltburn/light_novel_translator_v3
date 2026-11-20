@@ -1,7 +1,8 @@
+use crate::widget::ListnerFn;
 use gpui_kit::{
     App, ClickEvent, ElementId, Hsla, IntoElement, ParentElement as _, RenderOnce, SharedString,
-    Styled as _, Window,
-    base::{Disableable, StyledExt, h_flex},
+    Styled, Window,
+    base::{Disableable, h_flex},
     component::button::{Button, ButtonVariants as _},
     div, text,
 };
@@ -11,17 +12,20 @@ pub struct LabelButton {
     id: ElementId,
     label: SharedString,
     text: SharedString,
-    on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
+    on_click: Box<ListnerFn>,
     disable: bool,
 }
 
 impl LabelButton {
-    pub fn new(
+    pub fn new<T>(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,
         text: impl Into<SharedString>,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+        on_click: T,
+    ) -> Self
+    where
+        T: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    {
         Self {
             id: id.into(),
             label: label.into(),
@@ -41,6 +45,7 @@ impl RenderOnce for LabelButton {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         h_flex()
             .gap_2()
+            .w_full()
             .child(
                 Button::new(self.id)
                     .label(self.label)
@@ -51,10 +56,11 @@ impl RenderOnce for LabelButton {
             )
             .child(
                 div()
+                    .p_1()
                     .w_full()
                     .border_1()
+                    .rounded_sm()
                     .border_color(Hsla::white())
-                    .paddings(5.0)
                     .child(text!(self.text)),
             )
     }

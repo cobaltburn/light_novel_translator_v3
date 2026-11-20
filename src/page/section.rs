@@ -1,7 +1,7 @@
 use crate::text::clean_invisible_chars;
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Context, Div, Hsla, InteractiveElement, IntoElement,
-    ParentElement as _, SharedString, StatefulInteractiveElement, Styled as _, Window, div, text,
+    AnyElement, App, ClickEvent, Div, Hsla, InteractiveElement, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement, Styled as _, Window, div, px, text,
 };
 use rig::message::Message;
 use serde::{Deserialize, Serialize};
@@ -58,11 +58,10 @@ impl Section {
         part: usize,
         name: &str,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> [AnyElement; 2] {
-        [
-            part_div(name, part, self.content.len(), on_click),
-            div().child(text!(self.content.clone())).into_any_element(),
-        ]
+    ) -> Div {
+        div()
+            .child(part_div(name, part, self.content.len(), on_click))
+            .child(text!(self.content.clone()))
     }
 
     pub fn end_lines_div(
@@ -70,12 +69,11 @@ impl Section {
         part: usize,
         name: &str,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> [AnyElement; 2] {
+    ) -> Div {
         let end_lines = self.end_lines();
-        [
-            part_div(name, part, end_lines.len(), on_click),
-            div().child(text!(end_lines)).into_any_element(),
-        ]
+        div()
+            .child(part_div(name, part, end_lines.len(), on_click))
+            .child(text!(end_lines))
     }
 
     pub fn japanese_div(
@@ -83,11 +81,10 @@ impl Section {
         part: usize,
         name: &str,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> [AnyElement; 2] {
-        [
-            part_div(name, part, self.japanese.len(), on_click),
-            div().child(text!(self.japanese.clone())).into_any_element(),
-        ]
+    ) -> Div {
+        div()
+            .child(part_div(name, part, self.japanese.len(), on_click))
+            .child(text!(self.japanese.clone()))
     }
 
     fn end_lines(&self) -> String {
@@ -104,12 +101,14 @@ pub fn part_div(
     part: usize,
     count: usize,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> AnyElement {
+) -> impl IntoElement {
     div()
         .id(format!("{name}-{part}"))
+        .min_size_0()
+        .max_w(px(120.0))
+        .py_3()
         .text_color(Hsla::red())
         .hover(|s| s.underline())
-        .child(format!("\nSection: {}\nCount: {}\n", part + 1, count))
+        .child(format!("Section: {}\nCount: {}", part + 1, count))
         .on_click(on_click)
-        .into_any_element()
 }

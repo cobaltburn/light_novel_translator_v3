@@ -1,17 +1,16 @@
 use crate::screen::translation::Translation;
 use gpui_kit::{
     Context, InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled, Window,
-    base::{StyledExt, h_flex, v_flex},
-    px,
+    base::{h_flex, v_flex},
 };
 
 impl Render for Translation {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
-            .gap_2()
-            .min_h_0()
-            .size_full()
-            .paddings(px(10.0))
+            .gap_3()
+            .h_4_5()
+            .my_auto()
+            .px_2p5()
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::save_page))
             .on_action(cx.listener(Self::scroll_to))

@@ -1,3 +1,4 @@
+use crate::widget::ListnerFn;
 use gpui_kit::{
     App, ClickEvent, ElementId, IntoElement, RenderOnce, Window,
     assets::IconName,
@@ -10,14 +11,14 @@ use gpui_kit::{
 #[derive(IntoElement)]
 pub struct CloseButton {
     pub id: ElementId,
-    pub on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
+    pub on_click: Box<ListnerFn>,
 }
 
 impl CloseButton {
-    pub fn new(
-        id: impl Into<ElementId>,
-        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn new<T>(id: impl Into<ElementId>, on_click: T) -> Self
+    where
+        T: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    {
         Self {
             id: id.into(),
             on_click: Box::new(on_click),

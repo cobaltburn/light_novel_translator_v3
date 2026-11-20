@@ -1,0 +1,127 @@
+use crate::{
+    dialogs::{save_epub, select_epub, select_translated_folder},
+    epub::{DocBuilder, FormatPage},
+    error::{Error, Result, TaskExt as _},
+    screen::format::Format,
+};
+use gpui_kit::{AppContext as _, Context, Image, ImageFormat, Window};
+use rbook::Epub;
+use smol::{
+    fs::{read_dir, read_to_string},
+    stream::StreamExt,
+};
+use std::{io::Cursor, mem, path::PathBuf, sync::Arc};
+
+impl Format {
+    pub fn select_epub(&self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            if let Some(handle) = select_epub().await {
+                let buffer = handle.read().await;
+                let epub = cx
+                    .background_spawn(async { Epub::read(Cursor::new(buffer)) })
+                    .await?;
+
+                this.update(cx, |this, cx| {
+                    this.set_epub(handle.path(), epub)?;
+                    cx.notify();
+                    Ok::<_, Error>(())
+                })??;
+            }
+            Ok(())
+        })
+        .detach_and_prompt_err("Failed to open epub", window, cx);
+    }
+
+    fn set_epub(&mut self, path: impl Into<PathBuf>, epub: Epub) -> Result<()> {
+        let path: PathBuf = path.into();
+
+        self.cover = epub.manifest().cover_image().and_then(|e| {
+            let mime_type = mime_guess::from_ext(e.href().extension()?).first_raw()?;
+            let format = ImageFormat::from_mime_type(mime_type)?;
+            Some(Arc::new(Image::from_bytes(format, e.read_bytes().ok()?)))
+        });
+        self.metadata.title = path
+            .file_prefix()
+            .map_or_default(|e| e.to_string_lossy().to_string());
+        self.metadata.authors = epub
+            .metadata()
+            .creators()
+            .map(|e| e.value())
+            .collect::<Vec<_>>()
+            .join(" & ");
+
+        self.epub_path = Some(path);
+        self.epub = Some(epub);
+        Ok(())
+    }
+
+    pub fn select_folder(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let dir = self
+            .epub_path
+            .as_ref()
+            .and_then(|p| Some(p.parent()?.into()));
+        cx.spawn(async |this, cx| {
+            if let Some(handle) = select_translated_folder(dir).await {
+                let folder_path = handle.path().to_path_buf();
+                let pages = cx
+                    .background_spawn(read_markdown_files(folder_path))
+                    .await?;
+                this.update(cx, |this, cx| {
+                    this.set_pages(handle.file_name(), pages);
+                    cx.notify();
+                })?;
+            }
+            Ok(())
+        })
+        .detach_and_prompt_err("Failed to open source files", window, cx);
+    }
+
+    fn set_pages(&mut self, source_folder: String, pages: Vec<(PathBuf, String)>) {
+        self.pages = pages.into_iter().map(FormatPage::from).collect();
+        self.source_folder = Some(source_folder);
+    }
+
+    pub fn build_epub(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let builder = self.get_build_content();
+        cx.notify();
+
+        cx.spawn(async |_, cx| {
+            let (content, file_name) = cx.background_spawn(async move { builder?.build() }).await?;
+            if let Some(handle) = save_epub(file_name).await {
+                handle.write(&content).await?
+            }
+
+            Ok(())
+        })
+        .detach_and_prompt_err("Failed to build epub", window, cx);
+    }
+
+    pub fn get_build_content(&mut self) -> Result<DocBuilder> {
+        let epub = mem::take(&mut self.epub).ok_or(Error::BuildError("Epub not found"))?;
+        let pages = mem::take(&mut self.pages);
+        let name = self
+            .epub_path
+            .take()
+            .and_then(|e| Some(e.file_name()?.to_string_lossy().to_string()))
+            .unwrap_or_default();
+        let metadata = mem::take(&mut self.metadata);
+
+        self.source_folder = None;
+        self.cover = None;
+
+        Ok(DocBuilder::new(epub, name, pages, metadata))
+    }
+}
+
+async fn read_markdown_files(folder_path: PathBuf) -> Result<Vec<(PathBuf, String)>> {
+    let mut paths = read_dir(folder_path).await?;
+    let mut pages = Vec::new();
+    while let Some(entry) = paths.next().await {
+        let path = entry?.path();
+        if path.is_file() && path.extension().is_some_and(|e| e == "md") {
+            let content = read_to_string(&path).await?;
+            pages.push((path, content));
+        }
+    }
+    Ok(pages)
+}

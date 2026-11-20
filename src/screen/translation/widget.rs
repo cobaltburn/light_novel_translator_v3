@@ -42,7 +42,7 @@ impl Translation {
                     self.glossary_name().unwrap_or_default(),
                     cx.listener(Self::select_glossary),
                 )
-                .disable(running),
+                .disable(running || self.file_path.is_none()),
             )
             .child(
                 h_flex().justify_center().items_center().gap_2().children([
@@ -65,7 +65,6 @@ impl Translation {
     pub fn menu_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .gap_2()
-            .paddings(px(5.0))
             .child(self.epub_popover(cx))
             .child(self.server.server_popover(cx))
             .child(self.translate_button(cx))
@@ -97,16 +96,13 @@ impl Translation {
             .h_full()
             .border_1()
             .rounded_md()
-            .paddings(px(5.0))
             .border_color(cx.theme().primary)
-            .children(self.pages.iter().enumerate().map(|(i, p)| {
-                p.sidebar_menu_item(
-                    i,
-                    self.current_page == i,
-                    cx.listener(move |this, _, _, cx| this.set_page(i, cx)),
-                    self.focus_handle.clone(),
-                )
-            }))
+            .children(
+                self.pages
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| p.sidebar_menu_item(i, self.current_page == i, cx)),
+            )
     }
 
     pub fn text_box(&self, cx: &Context<Self>) -> impl IntoElement {
@@ -119,7 +115,6 @@ impl Translation {
             .border_1()
             .min_size_0()
             .rounded_md()
-            .paddings(px(5.0))
             .border_color(cx.theme().primary)
             .children(self.current_page().map(|page| {
                 div()
@@ -143,6 +138,8 @@ impl Translation {
                     ("end", DisplayType::End, SetDisplay::End),
                     ("japanese", DisplayType::Japanese, SetDisplay::Japanese),
                 ];
+
+                let menu = menu.scrollable(true).max_h(300.0).min_w(200.0).separator();
                 let menu = items.into_iter().fold(
                     menu.action_context(focus_handle.clone()),
                     |menu, (label, t, action)| {

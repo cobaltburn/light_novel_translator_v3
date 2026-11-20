@@ -3,17 +3,14 @@ use crate::{
         Client, Reply, Settings, SharedHistory, compact_history, history_len, is_response_report,
         reply_stream, rewind_history, seed_history,
     },
-    dialogs::{
-        complete_dialog, save_translation_dialog, select_epub_dialog, select_glossary_dialog,
-        select_recovery_dialog,
-    },
+    dialogs::{self, complete, select_epub, select_glossary, select_recovery},
     epub::get_pages,
     error::{Error, Result, TaskExt},
     page::{
-        Activity, Job, Page, Section, absolute_page_path, check_all_pages, check_page_at,
-        save_translation,
+        Activity, Job, Page, PageAction, Section, SidebarAction, absolute_page_path,
+        check_all_pages, check_page_at, save_translation,
     },
-    screen::{DisplayType, Translation},
+    screen::{Translate, Translation},
     server::{ServerUpdate, TranslationRun},
 };
 use futures::StreamExt as _;
@@ -22,16 +19,6 @@ use rig::{Agent, message::Message};
 use std::{collections::HashMap, mem, path::PathBuf};
 
 impl Translation {
-    pub fn set_display(&mut self, display: DisplayType, cx: &mut Context<Self>) {
-        self.display = display;
-        cx.notify();
-    }
-
-    pub fn set_page(&mut self, page: usize, cx: &mut Context<Self>) {
-        self.current_page = page;
-        cx.notify();
-    }
-
     fn set_epub(&mut self, path: impl Into<PathBuf>, pages: Vec<Page>) {
         self.current_page = 0;
         self.file_path = Some(path.into());
@@ -70,7 +57,7 @@ impl Translation {
             return;
         }
         cx.spawn(async move |this, cx| {
-            if let Some(handle) = select_epub_dialog().await {
+            if let Some(handle) = select_epub().await {
                 let buffer = handle.read().await;
                 let pages = cx.background_spawn(async { get_pages(buffer) }).await?;
 
@@ -92,7 +79,7 @@ impl Translation {
             return;
         }
         cx.spawn(async move |this, cx| {
-            if let Some(handle) = select_glossary_dialog().await {
+            if let Some(handle) = select_glossary().await {
                 let glossary = String::from_utf8(handle.read().await)?;
                 this.update(cx, |view, cx| {
                     if view.is_running() {
@@ -114,7 +101,7 @@ impl Translation {
         let name = name.to_string_lossy().into_owned();
         let pages = self.pages.clone();
         cx.background_spawn(async move {
-            if let Some(handle) = save_translation_dialog(name).await {
+            if let Some(handle) = dialogs::save_translation(name).await {
                 save_translation(&pages, handle.path()).await?;
             }
             Ok(())
@@ -127,7 +114,7 @@ impl Translation {
             return;
         }
         cx.spawn(async move |this, cx| {
-            let handle = select_recovery_dialog().await;
+            let handle = select_recovery().await;
             if let Some(handle) = handle {
                 let json = handle.read().await;
                 let pages: Vec<Page> = serde_json::from_slice(&json)?;
@@ -305,7 +292,7 @@ impl Translation {
 
     fn show_complete(&self, cx: &mut Context<Self>) {
         let file_name = self.epub_name().unwrap_or_default().into_owned();
-        cx.spawn(async move |_, _| complete_dialog(file_name).await)
+        cx.spawn(async move |_, _| complete(file_name).await)
             .detach();
     }
 }
@@ -364,6 +351,7 @@ async fn translate_parts(
         }
         let result =
             translate_part(this, &agent, history.as_ref(), &japanese, page, part, cx).await;
+        // TODO think about adding saving back up after every complete section
         this.update(cx, |this, cx| this.clean_section(page, part, cx))?;
         result?;
     }
@@ -374,7 +362,7 @@ async fn translate_parts(
 enum Attempt {
     Complete,
     Truncated,
-    Failed(Error),
+    Failed(Box<Error>),
 }
 
 /// Streams a part's translation into its section. A reply that fails or is
@@ -405,7 +393,7 @@ async fn translate_part(
         let reason = match stream_part(this, agent, japanese, page, part, retried, cx).await? {
             Attempt::Complete => return Ok(()),
             Attempt::Truncated if retried => return Ok(()),
-            Attempt::Failed(error) if retried => return Err(error),
+            Attempt::Failed(error) if retried => return Err(*error),
             Attempt::Truncated => "was cut off".to_string(),
             Attempt::Failed(error) => format!("failed: {error}"),
         };
@@ -441,12 +429,10 @@ async fn stream_part(
                 this.update(cx, |this, cx| this.append_content(page, part, &text, cx))?
             }
             Ok(Reply::Truncated) => truncated = true,
-            // A bad chunk of the reply, but the server is fine: report it, pausing
-            // the run until it's dismissed, then read the rest of the reply.
             Err(error) if last && is_response_report(&error) => {
                 error.display_error("Translation error", cx).await
             }
-            Err(error) => return Ok(Attempt::Failed(error)),
+            Err(error) => return Ok(Attempt::Failed(Box::new(error))),
         }
     }
     Ok(if truncated {
@@ -454,6 +440,37 @@ async fn stream_part(
     } else {
         Attempt::Complete
     })
+}
+
+impl PageAction for Translation {
+    fn start_section(
+        &mut self,
+        page: usize,
+        part: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.translate_action(&Translate::Part { page, part }, window, cx);
+    }
+}
+
+impl SidebarAction for Translation {
+    fn all_action(page: usize) -> Box<dyn gpui_kit::Action> {
+        Box::new(Translate::All(page))
+    }
+
+    fn page_action(page: usize) -> Box<dyn gpui_kit::Action> {
+        Box::new(Translate::Page(page))
+    }
+
+    fn section_action(page: usize, part: usize) -> Box<dyn gpui_kit::Action> {
+        Box::new(Translate::Part { page, part })
+    }
+
+    fn set_page(&mut self, page: usize, cx: &mut Context<Self>) {
+        self.current_page = page;
+        cx.notify();
+    }
 }
 
 impl ServerUpdate for Translation {

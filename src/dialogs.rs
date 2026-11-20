@@ -1,8 +1,7 @@
-use std::path::Path;
-
 use rfd::FileHandle;
+use std::path::{Path, PathBuf};
 
-pub async fn select_epub_dialog() -> Option<FileHandle> {
+pub async fn select_epub() -> Option<FileHandle> {
     rfd::AsyncFileDialog::new()
         .set_title("select epub")
         .add_filter("epub", &["epub"])
@@ -10,14 +9,14 @@ pub async fn select_epub_dialog() -> Option<FileHandle> {
         .await
 }
 
-pub async fn select_glossary_dialog() -> Option<FileHandle> {
+pub async fn select_glossary() -> Option<FileHandle> {
     rfd::AsyncFileDialog::new()
         .set_title("select glossary")
         .pick_file()
         .await
 }
 
-pub async fn save_translation_dialog(name: impl Into<String>) -> Option<FileHandle> {
+pub async fn save_translation(name: impl Into<String>) -> Option<FileHandle> {
     rfd::AsyncFileDialog::new()
         .set_title("save translation")
         .set_file_name(name)
@@ -25,7 +24,24 @@ pub async fn save_translation_dialog(name: impl Into<String>) -> Option<FileHand
         .await
 }
 
-pub async fn select_recovery_dialog() -> Option<FileHandle> {
+pub async fn save_epub(file_name: impl Into<String>) -> Option<FileHandle> {
+    rfd::AsyncFileDialog::new()
+        .set_title("save epub")
+        .set_file_name(file_name)
+        .add_filter("epub", &["epub"])
+        .save_file()
+        .await
+}
+
+pub async fn save_file(file_name: impl Into<String>) -> Option<FileHandle> {
+    rfd::AsyncFileDialog::new()
+        .set_title("save")
+        .set_file_name(file_name)
+        .save_file()
+        .await
+}
+
+pub async fn select_recovery() -> Option<FileHandle> {
     rfd::AsyncFileDialog::new()
         .add_filter("json", &["json"])
         .set_title("recovery")
@@ -33,7 +49,16 @@ pub async fn select_recovery_dialog() -> Option<FileHandle> {
         .await
 }
 
-pub async fn complete_dialog(file_name: impl AsRef<str>) {
+pub async fn select_translated_folder(directory: Option<PathBuf>) -> Option<FileHandle> {
+    let dialog = rfd::AsyncFileDialog::new().set_title("select translated folder");
+    let dialog = match directory {
+        Some(path) => dialog.set_directory(path),
+        None => dialog,
+    };
+    dialog.pick_folder().await
+}
+
+pub async fn complete(file_name: impl AsRef<str>) {
     let file_name = Path::new(file_name.as_ref())
         .file_prefix()
         .unwrap_or_default()

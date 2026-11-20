@@ -4,7 +4,7 @@ use crate::{
     text::{part_tag, remove_think_tags},
 };
 use futures::future::join_all;
-use smol::fs::{self, create_dir};
+use smol::fs;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -22,7 +22,7 @@ pub fn page_markdown(page: &Page) -> String {
 }
 
 pub async fn save_translation(pages: &[Page], folder: impl AsRef<Path>) -> Result<()> {
-    create_dir(&folder).await?;
+    fs::create_dir(&folder).await?;
     save_pages(&pages, folder).await?;
     Ok(())
 }

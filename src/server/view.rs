@@ -30,10 +30,10 @@ impl Server {
         &self,
         cx: &mut Context<'_, T>,
     ) -> impl IntoElement {
-        let think_radio: Vec<_> = THINK_ORDER.into_iter().copied().collect();
+        let think_radio: Vec<_> = THINK_ORDER.iter().copied().collect();
         let think_index = think_radio.iter().position(|t| t == &self.settings.think);
 
-        let method_radio: Vec<_> = METHOD_ORDER.into_iter().copied().collect();
+        let method_radio: Vec<_> = METHOD_ORDER.iter().copied().collect();
         let method_index = method_radio.iter().position(|m| m == &self.method);
 
         Popover::new("server-popover")
