@@ -1,7 +1,7 @@
 use crate::text::clean_invisible_chars;
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Div, Hsla, InteractiveElement, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement, Styled as _, Window, div, px, text,
+    App, ClickEvent, Div, Hsla, InteractiveElement, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement, Styled as _, Window, div, px, text,
 };
 use rig::message::Message;
 use serde::{Deserialize, Serialize};

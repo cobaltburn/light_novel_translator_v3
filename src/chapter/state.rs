@@ -1,13 +1,5 @@
+use crate::page::Activity;
 use std::{ffi::OsStr, path::PathBuf};
-
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq, Eq)]
-pub enum Activity {
-    #[default]
-    Incomplete,
-    Complete,
-    Active,
-}
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Default)]

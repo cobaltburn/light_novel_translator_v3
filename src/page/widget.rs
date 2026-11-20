@@ -1,10 +1,10 @@
 use crate::{
     page::{Activity, ErrorType, Page, PageError},
-    screen::{DisplayType, SavePage, Translate, Translation},
+    screen::{DisplayType, SavePage, Translation},
 };
 use gpui_kit::{
-    Action, App, ClickEvent, Context, Div, FocusHandle, Focusable, Hsla, InteractiveElement as _,
-    IntoElement, ParentElement as _, Styled, Window,
+    Action, Context, Div, Focusable, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement as _, Styled, Window,
     assets::IconName,
     base::{h_flex, v_flex},
     component::{

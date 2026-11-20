@@ -10,4 +10,3 @@ pub use jobs::*;
 pub use method::*;
 pub use state::*;
 pub use update::*;
-pub use view::*;

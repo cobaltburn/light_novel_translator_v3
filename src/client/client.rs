@@ -1,7 +1,7 @@
 use crate::{
     client::{
-        CONSENSUS_PROMPT, CONVERSATION_ID, GLOSSARY_PROMPT, Settings, SharedHistory,
-        TRANSLATION_PROMPT, translation_glossary,
+        CONVERSATION_ID, GLOSSARY_PROMPT, Settings, SharedHistory, TRANSLATION_PROMPT,
+        translation_glossary,
     },
     error::{Error, Result},
 };
@@ -72,15 +72,6 @@ impl Client {
             None => builder,
         };
         Ok(builder.build())
-    }
-
-    pub fn consensus_agent(&self, model: &str, settings: &Settings) -> Result<Agent> {
-        Ok(self
-            .agent_builder(model)?
-            .preamble(CONSENSUS_PROMPT)
-            .temperature(settings.temperature.0)
-            .additional_params(settings.agent_params())
-            .build())
     }
 
     pub fn glossary_agent(&self, model: &str, settings: &Settings) -> Result<Agent> {
