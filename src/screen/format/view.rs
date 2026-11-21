@@ -11,6 +11,7 @@ impl Render for Format {
             .gap_3()
             .h_5_6()
             .w_full()
+            .min_w_0()
             .child(
                 h_flex()
                     .gap_2()

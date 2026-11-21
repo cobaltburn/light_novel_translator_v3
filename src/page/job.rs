@@ -1,3 +1,5 @@
+use crate::page::Page;
+
 /// One step of a run over the pages of a book, taken from the front of a queue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Job {
@@ -16,14 +18,14 @@ impl Job {
         (first..len).map(Job::Page).chain([Job::Finish])
     }
 
-    /* pub fn error_run_page(index: usize, page: &Page) -> Vec<Job> {
+    pub fn error_run_from(index: usize, page: &Page) -> Vec<Job> {
         page.error_indexes()
             .into_iter()
             .map(move |part| Job::Part { page: index, part })
             .collect()
     }
 
-    pub fn error_run_from(pages: &[Page]) -> Vec<Job> {
+    pub fn all_error_run_from(pages: &[Page]) -> Vec<Job> {
         pages
             .iter()
             .enumerate()
@@ -34,7 +36,7 @@ impl Job {
             })
             .flatten()
             .collect()
-    } */
+    }
 }
 
 #[cfg(test)]

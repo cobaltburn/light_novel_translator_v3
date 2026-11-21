@@ -63,7 +63,36 @@ impl Format {
                 })??;
                 Ok(())
             })
-            .detach_and_prompt_err("Failed to open epub", window, cx);
+            .detach_and_prompt_err("Failed to load epub", window, cx);
+        };
+    }
+
+    pub fn on_drop_folder(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.paths().len() != 1 {
+            return;
+        }
+        if let Some(path) = paths.paths().first().cloned()
+            && path.is_dir()
+        {
+            cx.spawn(async move |this, cx| {
+                let folder_path = path.clone();
+                let pages = cx
+                    .background_spawn(read_markdown_files(folder_path))
+                    .await?;
+
+                this.update(cx, |this, cx| {
+                    let file_name = path.file_name().map_or_default(|s| s.to_string_lossy());
+                    this.set_pages(file_name, pages);
+                    cx.notify();
+                })?;
+                Ok(())
+            })
+            .detach_and_prompt_err("Failed to load markdown", window, cx);
         };
     }
 
@@ -133,9 +162,9 @@ impl Format {
         .detach_and_prompt_err("Failed to open source files", window, cx);
     }
 
-    fn set_pages(&mut self, source_folder: String, pages: Vec<(PathBuf, String)>) {
+    fn set_pages(&mut self, source_folder: impl Into<String>, pages: Vec<(PathBuf, String)>) {
         self.pages = pages.into_iter().map(FormatPage::from).collect();
-        self.source_folder = Some(source_folder);
+        self.source_folder = Some(source_folder.into());
     }
 
     pub fn build_epub(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -171,8 +200,8 @@ impl Format {
     }
 }
 
-async fn read_markdown_files(folder_path: PathBuf) -> Result<Vec<(PathBuf, String)>> {
-    let mut paths = read_dir(folder_path).await?;
+async fn read_markdown_files(folder_path: impl AsRef<Path>) -> Result<Vec<(PathBuf, String)>> {
+    let mut paths = read_dir(&folder_path).await?;
     let mut pages = Vec::new();
     while let Some(entry) = paths.next().await {
         let path = entry?.path();

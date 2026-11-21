@@ -70,21 +70,24 @@ impl Format {
     }
 
     pub fn content_files(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .p_2()
-            .size_full()
+        div()
+            .flex_1()
+            .min_h_0()
+            .w_full()
             .rounded_sm()
             .primary_border(cx)
-            .overflow_y_scrollbar()
             .drag_over::<ExternalPaths>(|style, _, _, cx| {
                 let theme = cx.theme();
                 style.border_color(theme.accent).bg(theme.drop_target)
             })
-            .children(
-                self.pages
-                    .iter()
-                    .filter_map(|p| p.path.file_prefix())
-                    .map(|p| div().child(text!(p.to_string_lossy()))),
+            .on_drop(cx.listener(Self::on_drop_folder))
+            .child(
+                v_flex().p_2().size_full().overflow_y_scrollbar().children(
+                    self.pages
+                        .iter()
+                        .filter_map(|p| p.path.file_prefix())
+                        .map(|p| div().child(text!(p.to_string_lossy()))),
+                ),
             )
     }
 

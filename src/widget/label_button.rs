@@ -1,9 +1,9 @@
 use crate::widget::{ListnerFn, primary_button};
 use gpui_kit::{
-    App, ClickEvent, ElementId, IntoElement, ParentElement as _, RenderOnce, SharedString, Styled,
-    Window,
+    App, ClickEvent, ElementId, InteractiveElement as _, IntoElement, ParentElement as _,
+    RenderOnce, SharedString, StatefulInteractiveElement as _, Styled, Window,
     base::{Disableable, h_flex},
-    component::ActiveTheme,
+    component::{ActiveTheme, tooltip::Tooltip},
     div, text,
 };
 
@@ -43,21 +43,28 @@ impl LabelButton {
 
 impl RenderOnce for LabelButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let tooltip_text = self.text.clone();
         h_flex()
             .gap_2()
             .w_full()
+            .min_w_0()
             .child(
-                primary_button(self.id, self.label)
+                primary_button(self.id.clone(), self.label)
+                    .flex_shrink_0()
                     .disabled(self.disable)
                     .on_click(self.on_click),
             )
             .child(
                 div()
+                    .id((self.id, "text"))
                     .p_1()
-                    .w_full()
+                    .flex_1()
+                    .min_w_0()
                     .border_1()
                     .rounded_sm()
+                    .text_ellipsis_middle()
                     .border_color(cx.theme().primary)
+                    .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx))
                     .child(text!(self.text)),
             )
     }
