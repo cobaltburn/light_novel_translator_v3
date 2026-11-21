@@ -3,7 +3,7 @@
 use super::stream::translate_parts;
 use crate::{
     error::Result,
-    page::{Job, Page, check_page_at},
+    page::{Activity, Job, Page, check_page_at},
     screen::Translation,
     server::TranslationRun,
 };
@@ -74,6 +74,7 @@ impl Translation {
         )?;
         self.history = run.history.clone().map(|history| (page, history));
         self.pages[page].clear();
+        self.mark_active(page, &run);
         cx.notify();
         Ok(run)
     }
@@ -95,9 +96,19 @@ impl Translation {
         self.history = None;
         let current = &mut self.pages[page];
         current.sections[part].content.clear();
-        current.errors.clear();
+        current.errors.retain(|e| !e.depends_on(part));
+        self.mark_active(page, &run);
         cx.notify();
         Ok(run)
+    }
+
+    /// Marks `page` active at the first of `run`'s parts as soon as the page is
+    /// cleared, so [`Self::stop`] re-checks it even if the run is cancelled
+    /// before that part starts streaming (while the history is being seeded).
+    fn mark_active(&mut self, page: usize, run: &TranslationRun) {
+        if let Some(&(part, _)) = run.parts.first() {
+            self.pages[page].activity = Activity::Active(part + 1);
+        }
     }
 
     /// Checks a translated page, then backs the book up next to the epub.

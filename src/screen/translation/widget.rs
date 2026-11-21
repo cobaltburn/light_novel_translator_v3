@@ -7,10 +7,11 @@ use crate::{
     },
 };
 use gpui_kit::{
-    Anchor, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    Anchor, Context, ExternalPaths, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, Window,
     base::{Disableable, StyledExt as _, h_flex},
     component::{
+        ActiveTheme,
         menu::{ContextMenuExt, PopupMenu},
         popover::Popover,
         scroll::ScrollableElement,
@@ -75,11 +76,12 @@ impl Translation {
     }
 
     pub fn page_side_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let running = self.is_running();
         let items = self
             .pages
             .iter()
             .enumerate()
-            .map(|(i, p)| p.sidebar_menu_item(i, self.current_page == i, self, cx));
+            .map(|(i, p)| p.sidebar_menu_item(i, self.current_page == i, running, self, cx));
         entry_sidebar("page-sidebar", items, cx)
     }
 
@@ -90,6 +92,11 @@ impl Translation {
             .min_size_0()
             .rounded_md()
             .primary_border(cx)
+            .drag_over::<ExternalPaths>(|style, _, _, cx| {
+                let theme = cx.theme();
+                style.border_color(theme.accent).bg(theme.drop_target)
+            })
+            .on_drop(cx.listener(Self::on_drop_epub))
             .children(self.current_page().map(|page| self.page_text(page, cx)))
             .context_menu(self.text_menu())
     }
@@ -106,10 +113,10 @@ impl Translation {
                     .paddings(px(5.0))
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll_handle)
-                    .children(page.text(self.display, self.current_page, cx)),
+                    .children(page.text(self.display, self.current_page, self.is_running(), cx)),
             )
             .vertical_scrollbar(&self.scroll_handle)
-            .child(page.error_cards(self.current_page, cx))
+            .children(page.error_cards(self.current_page, self.is_running(), cx))
     }
 
     /// The text box's context menu: how to display the text, and where to scroll.
@@ -126,7 +133,7 @@ impl Translation {
                     menu.menu_with_check(item.label(), display == item, Box::new(SetDisplay(item)))
                 },
             );
-            numbered_items(menu, sections, "section", |part| {
+            numbered_items(menu, sections, "section", false, |part| {
                 Box::new(ScrollTo { part })
             })
         }

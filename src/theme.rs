@@ -19,7 +19,7 @@ macro_rules! theme_file {
 }
 
 /// Each file in the `themes` folder. Add a file here to make its themes available.
-const THEME_FILES: [(&str, &str); 21] = [
+const THEME_FILES: &[(&str, &str)] = &[
     theme_file!("adventure.json"),
     theme_file!("alduin.json"),
     theme_file!("asciinema.json"),
@@ -46,17 +46,13 @@ const THEME_FILES: [(&str, &str); 21] = [
 /// Registers the built-in themes and applies the default one.
 pub fn init_themes(cx: &mut App) {
     let registry = ThemeRegistry::global_mut(cx);
-    for (name, content) in THEME_FILES {
+    for &(name, content) in THEME_FILES {
         if let Err(error) = registry.load_themes_from_str(content) {
             tracing::error!("Failed to load theme file {name}: {error}");
         }
     }
 
-    if let Some(theme) = ThemeRegistry::global(cx)
-        .themes()
-        .get(DEFAULT_THEME)
-        .cloned()
-    {
+    if let Some(theme) = registry.themes().get(DEFAULT_THEME).cloned() {
         Theme::update(cx, |current| current.apply_config(&theme));
     }
 }
@@ -64,21 +60,17 @@ pub fn init_themes(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui_kit::component::ThemeSet;
     use std::{collections::BTreeSet, fs};
 
     #[test]
     fn every_theme_file_parses_and_the_default_theme_is_among_them() {
-        let names: Vec<_> = THEME_FILES
-            .iter()
-            .flat_map(|(file, content)| {
-                serde_json::from_str::<ThemeSet>(content)
-                    .unwrap_or_else(|error| panic!("{file}: {error}"))
-                    .themes
-            })
-            .map(|theme| theme.name)
-            .collect();
-        assert!(names.iter().any(|name| name == DEFAULT_THEME));
+        let mut registry = ThemeRegistry::default();
+        for &(file, content) in THEME_FILES {
+            registry
+                .load_themes_from_str(content)
+                .unwrap_or_else(|error| panic!("{file}: {error}"));
+        }
+        assert!(registry.themes().contains_key(DEFAULT_THEME));
     }
 
     #[test]

@@ -7,7 +7,7 @@ use gpui_kit::{
 impl Render for Format {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
-            .p_3()
+            .px_5()
             .gap_3()
             .h_5_6()
             .w_full()

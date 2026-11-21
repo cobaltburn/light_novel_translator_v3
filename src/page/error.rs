@@ -60,6 +60,14 @@ impl PageError {
             error: ErrorType::End,
         }
     }
+
+    /// Whether the check that found this error read section `part`'s
+    /// translation, so that translating `part` again can change it. The Copy
+    /// check compares a section with every section before it; the others
+    /// read only their own section.
+    pub fn depends_on(&self, part: usize) -> bool {
+        self.index == part || (self.index > part && matches!(self.error, ErrorType::Copy))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,4 +80,21 @@ pub enum ErrorType {
     Header,
     Link,
     End,
+}
+
+#[cfg(test)]
+mod test {
+    use super::PageError;
+
+    #[test]
+    fn only_own_errors_and_later_copies_depend_on_part() {
+        let part = 3;
+        assert!(PageError::size(part, 10).depends_on(part));
+        assert!(PageError::copy(part).depends_on(part));
+        assert!(PageError::copy(part + 1).depends_on(part));
+
+        assert!(!PageError::copy(part - 1).depends_on(part));
+        assert!(!PageError::japanese(part + 1).depends_on(part));
+        assert!(!PageError::size(part - 1, 10).depends_on(part));
+    }
 }

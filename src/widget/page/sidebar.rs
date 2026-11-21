@@ -17,20 +17,26 @@ pub trait PageSidebarAction: SidebarAction {
 
 impl Page {
     /// The page's item in `view`'s sidebar, whose menu can also run each section.
+    /// The save and run items are disabled while `running`.
     pub fn sidebar_menu_item<T: PageSidebarAction>(
         &self,
         page: usize,
         active: bool,
+        running: bool,
         view: &T,
         cx: &Context<T>,
     ) -> SidebarMenuItem {
         let activity = self.activity;
         let sections = self.sections.len();
         let name = self.file_stem().unwrap_or_default();
-        sidebar_item(page, &name, active, view, cx, move |menu| {
-            numbered_items(menu.separator(), sections, "translate part", |part| {
-                T::section_action(page, part)
-            })
+        sidebar_item(page, &name, active, running, view, cx, move |menu| {
+            numbered_items(
+                menu.separator(),
+                sections,
+                "translate part",
+                running,
+                |part| T::section_action(page, part),
+            )
         })
         .suffix(move |_, _| activity_icon(activity))
     }

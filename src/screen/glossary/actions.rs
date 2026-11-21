@@ -44,6 +44,10 @@ impl Glossary {
     }
 
     pub fn run_action(&mut self, action: &Run, window: &mut Window, cx: &mut Context<Self>) {
+        // Starting would cancel the run in progress.
+        if self.is_running() {
+            return;
+        }
         let pending = match *action {
             Run::All(i) => (i..self.chapters.len()).collect(),
             Run::Chapter(i) => VecDeque::from([i]),

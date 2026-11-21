@@ -74,6 +74,10 @@ impl Translation {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Starting would cancel the run in progress.
+        if self.is_running() {
+            return;
+        }
         let jobs = match *action {
             Translate::All(page) => Job::run_from(page, self.pages.len()).collect(),
             Translate::Page(page) => vec![Job::Page(page)],

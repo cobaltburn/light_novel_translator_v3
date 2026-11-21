@@ -37,11 +37,13 @@ pub fn entry_sidebar(
 
 /// The sidebar item for entry `index` of `view`. Its context menu saves and
 /// runs the entry, followed by whatever `more_items` adds, and dispatches to
-/// `view`'s focus handle, where the view handles the actions.
+/// `view`'s focus handle, where the view handles the actions. The save and run
+/// items are disabled while `running`.
 pub fn sidebar_item<T: SidebarAction>(
     index: usize,
     name: &str,
     active: bool,
+    running: bool,
     view: &T,
     cx: &Context<T>,
     more_items: impl Fn(PopupMenu) -> PopupMenu + 'static,
@@ -54,10 +56,10 @@ pub fn sidebar_item<T: SidebarAction>(
         .context_menu(move |menu, _, _| {
             more_items(
                 action_menu(menu, focus_handle.clone())
-                    .menu("save", T::save_action(index))
+                    .menu_with_disabled("save", T::save_action(index), running)
                     .separator()
-                    .menu(run_all, T::run_all_action(index))
-                    .menu(run_one, T::run_one_action(index)),
+                    .menu_with_disabled(run_all, T::run_all_action(index), running)
+                    .menu_with_disabled(run_one, T::run_one_action(index), running),
             )
         })
 }

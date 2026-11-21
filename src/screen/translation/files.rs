@@ -7,11 +7,12 @@ use crate::{
     page::{Page, absolute_page_path, check_all_pages, save_translation},
     screen::Translation,
 };
-use gpui_kit::{AppContext as _, ClickEvent, Context, Window};
+use gpui_kit::{AppContext as _, ClickEvent, Context, ExternalPaths, Window};
+use smol::fs;
 use std::{collections::HashMap, mem, path::PathBuf};
 
 impl Translation {
-    fn set_epub(&mut self, path: impl Into<PathBuf>, pages: Vec<Page>) {
+    fn set_pages(&mut self, path: impl Into<PathBuf>, pages: Vec<Page>) {
         self.current_page = 0;
         self.file_path = Some(path.into());
         self.pages = pages;
@@ -28,16 +29,44 @@ impl Translation {
                 let pages = cx.background_spawn(async { get_pages(buffer) }).await?;
 
                 this.update(cx, |this, cx| {
-                    if this.is_running() {
-                        return;
+                    if !this.is_running() {
+                        this.set_pages(handle.path(), pages);
+                        cx.notify();
                     }
-                    this.set_epub(handle.path(), pages);
-                    cx.notify();
                 })?;
             }
             Ok(())
         })
         .detach_and_prompt_err("Failed to open epub", window, cx);
+    }
+
+    pub fn on_drop_epub(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.is_running() || paths.paths().len() != 1 {
+            return;
+        }
+        if let Some(path) = paths.paths().first().cloned()
+            && path.is_file()
+            && path.extension().is_some_and(|p| p == "epub")
+        {
+            cx.spawn(async move |this, cx| {
+                let buffer = fs::read(&path).await?;
+                let pages = cx.background_spawn(async { get_pages(buffer) }).await?;
+
+                this.update(cx, |this, cx| {
+                    if !this.is_running() {
+                        this.set_pages(path, pages);
+                        cx.notify();
+                    }
+                })?;
+                Ok(())
+            })
+            .detach_and_prompt_err("Failed to open epub", window, cx);
+        };
     }
 
     pub fn select_glossary(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {

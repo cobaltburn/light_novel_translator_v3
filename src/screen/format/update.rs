@@ -4,10 +4,10 @@ use crate::{
     error::{Error, Result, TaskExt as _},
     screen::format::Format,
 };
-use gpui_kit::{AppContext as _, Context, Image, ImageFormat, Window};
+use gpui_kit::{AppContext as _, Context, ExternalPaths, Image, ImageFormat, Window};
 use rbook::Epub;
 use smol::{
-    fs::{read_dir, read_to_string},
+    fs::{self, read_dir, read_to_string},
     stream::StreamExt,
 };
 use std::{
@@ -35,6 +35,36 @@ impl Format {
             Ok(())
         })
         .detach_and_prompt_err("Failed to open epub", window, cx);
+    }
+
+    pub fn on_drop_epub(
+        &mut self,
+        paths: &ExternalPaths,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.paths().len() != 1 {
+            return;
+        }
+        if let Some(path) = paths.paths().first().cloned()
+            && path.is_file()
+            && path.extension().is_some_and(|p| p == "epub")
+        {
+            cx.spawn_in(window, async move |this, cx| {
+                let buffer = fs::read(&path).await?;
+                let epub = cx
+                    .background_spawn(async { Epub::read(Cursor::new(buffer)) })
+                    .await?;
+
+                this.update_in(cx, |this, window, cx| {
+                    this.set_epub(path, epub, window, cx)?;
+                    cx.notify();
+                    Ok::<_, Error>(())
+                })??;
+                Ok(())
+            })
+            .detach_and_prompt_err("Failed to open epub", window, cx);
+        };
     }
 
     fn set_epub(

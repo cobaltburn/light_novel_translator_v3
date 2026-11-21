@@ -2,7 +2,7 @@ use crate::app::{Screen, Translator};
 use gpui_kit::{
     Context, IntoElement, ParentElement, Render, Styled, Window,
     base::{h_flex, v_flex},
-    component::sidebar::{Sidebar, SidebarMenuItem},
+    component::sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
     px,
 };
 
@@ -11,15 +11,19 @@ impl Render for Translator {
         let screens = [Screen::Translation, Screen::Glossary, Screen::Build];
         h_flex()
             .size_full()
-            .child(Sidebar::new("navigation-sidebar").w(px(150.0)).children(
-                screens.into_iter().map(|screen| {
-                    SidebarMenuItem::new(screen.to_string()).on_click(cx.listener(
-                        move |this, _, _, cx| {
-                            this.set_screen(screen, cx);
-                        },
-                    ))
-                }),
-            ))
+            .child(
+                Sidebar::new("navigation-sidebar").w(px(150.0)).child(
+                    SidebarMenu::new()
+                        .gap_2()
+                        .children(screens.into_iter().map(|screen| {
+                            SidebarMenuItem::new(screen.to_string())
+                                .text_base()
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.set_screen(screen, cx);
+                                }))
+                        })),
+                ),
+            )
             .child(match self.screen {
                 Screen::Translation => self.translation_view(window, cx).into_any_element(),
                 Screen::Build => self.format.clone().into_any_element(),

@@ -3,14 +3,14 @@ use crate::{
     widget::{LabelButton, PrimaryBorder as _, primary_button},
 };
 use gpui_kit::{
-    Context, Entity, IntoElement, ObjectFit, ParentElement, Styled, StyledImage,
+    Context, Entity, ExternalPaths, InteractiveElement as _, IntoElement, ObjectFit, ParentElement,
+    Styled, StyledImage,
     base::{Disableable, h_flex, input::InputState, v_flex},
-    component::{input::Input, label::Label, scroll::ScrollableElement},
+    component::{ActiveTheme as _, input::Input, label::Label, scroll::ScrollableElement},
     div, img, text,
 };
 
 impl Format {
-    /// The source epub, and its cover.
     pub fn epub_column(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .gap_3()
@@ -55,6 +55,11 @@ impl Format {
             .justify_center()
             .rounded_sm()
             .primary_border(cx)
+            .drag_over::<ExternalPaths>(|style, _, _, cx| {
+                let theme = cx.theme();
+                style.border_color(theme.accent).bg(theme.drop_target)
+            })
+            .on_drop(cx.listener(Self::on_drop_epub))
             .children(self.cover.as_ref().map(|image| {
                 img(image.clone())
                     .absolute()
@@ -71,6 +76,10 @@ impl Format {
             .rounded_sm()
             .primary_border(cx)
             .overflow_y_scrollbar()
+            .drag_over::<ExternalPaths>(|style, _, _, cx| {
+                let theme = cx.theme();
+                style.border_color(theme.accent).bg(theme.drop_target)
+            })
             .children(
                 self.pages
                     .iter()

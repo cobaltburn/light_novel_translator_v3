@@ -7,10 +7,10 @@ use gpui_kit::{
 impl Render for Translation {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
+            .px_5()
             .gap_3()
             .h_4_5()
             .my_auto()
-            .px_2p5()
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::save_page))
             .on_action(cx.listener(Self::scroll_to))

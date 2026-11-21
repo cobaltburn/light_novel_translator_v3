@@ -1,11 +1,11 @@
 use crate::{
     page::{ErrorType, Page, PageError},
-    widget::page::PageAction,
+    widget::page::{PageAction, start_section_listener},
 };
 use gpui_kit::{
-    ClickEvent, Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, Styled as _,
-    base::v_flex,
+    Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _,
+    base::{Disableable as _, v_flex},
     component::{
         ActiveTheme as _,
         button::{Button, ButtonVariants as _},
@@ -14,15 +14,21 @@ use gpui_kit::{
 };
 
 impl Page {
-    /// A floating list of the page's empty sections and failed checks.
-    /// Clicking a card re-runs the translation of its section.
-    pub fn error_cards<T: PageAction>(&self, page: usize, cx: &Context<T>) -> impl IntoElement {
-        let on_click = |part: usize| {
-            cx.listener(move |this, _: &ClickEvent, window, cx| {
-                this.start_section(page, part, window, cx)
-            })
-        };
-
+    /// A floating list of the page's empty sections and failed checks, or
+    /// `None` when it has neither. Clicking a card re-runs the translation of
+    /// its section. The cards are disabled while `running`, since starting a
+    /// section cancels the current run.
+    pub fn error_cards<T: PageAction>(
+        &self,
+        page: usize,
+        running: bool,
+        cx: &Context<T>,
+    ) -> Option<impl IntoElement> {
+        // No cards to show, so no box to float over the text.
+        if self.errors.is_empty() && !self.check_incomplete() {
+            return None;
+        }
+        let on_click = |part| start_section_listener(cx, page, part);
         let empty_buttons = self
             .sections
             .iter()
@@ -32,31 +38,37 @@ impl Page {
                 card_button(
                     format!("empty-button-{i}"),
                     format!("Empty Section: {:2}", i + 1),
+                    running,
                 )
                 .on_click(on_click(i))
             });
 
         let error_buttons = self.errors.iter().enumerate().map(|(id, e)| {
-            card_button(format!("error-button-{id}"), error_label(e)).on_click(on_click(e.index))
+            card_button(format!("error-button-{id}"), error_label(e), running)
+                .on_click(on_click(e.index))
         });
 
-        v_flex()
-            .p_1()
-            .gap_1()
-            .top_2()
-            .right_4()
-            .occlude()
-            .absolute()
-            .rounded_md()
-            .min_h_0()
-            .max_h(px(300.0))
-            .bg(cx.theme().popover)
-            .children(empty_buttons.chain(error_buttons))
+        Some(
+            v_flex()
+                .id("error-cards")
+                .p_1()
+                .gap_1()
+                .top_2()
+                .right_4()
+                .occlude()
+                .absolute()
+                .rounded_md()
+                .min_h_0()
+                .max_h(px(300.0))
+                .overflow_y_scroll()
+                .bg(cx.theme().popover)
+                .children(empty_buttons.chain(error_buttons)),
+        )
     }
 }
 
-fn card_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Button {
-    Button::new(id).primary().label(label)
+fn card_button(id: impl Into<ElementId>, label: impl Into<SharedString>, disabled: bool) -> Button {
+    Button::new(id).primary().label(label).disabled(disabled)
 }
 
 fn error_label(error: &PageError) -> String {

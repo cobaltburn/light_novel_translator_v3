@@ -11,14 +11,16 @@ pub fn action_menu(menu: PopupMenu, focus: FocusHandle) -> PopupMenu {
         .action_context(focus)
 }
 
-/// Appends one item per index, labelled `"{label} {index + 1}"`.
+/// Appends one item per index, labelled `"{label} {index + 1}"`, all of them
+/// disabled when `disabled`.
 pub fn numbered_items(
     menu: PopupMenu,
     count: usize,
     label: &str,
+    disabled: bool,
     action: impl Fn(usize) -> Box<dyn Action>,
 ) -> PopupMenu {
     (0..count).fold(menu, |menu, i| {
-        menu.menu(format!("{label} {}", i + 1), action(i))
+        menu.menu_with_disabled(format!("{label} {}", i + 1), action(i), disabled)
     })
 }

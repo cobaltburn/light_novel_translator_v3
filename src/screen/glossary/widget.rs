@@ -54,11 +54,12 @@ impl Glossary {
     }
 
     pub fn chapter_side_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let running = self.is_running();
         let items = self
             .chapters
             .iter()
             .enumerate()
-            .map(|(i, c)| c.sidebar_menu_item(i, self.current_chapter == i, self, cx));
+            .map(|(i, c)| c.sidebar_menu_item(i, self.current_chapter == i, running, self, cx));
         entry_sidebar("chapter-sidebar", items, cx)
     }
 

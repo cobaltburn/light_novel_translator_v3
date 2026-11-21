@@ -12,7 +12,7 @@ pub fn section_div(
     part: usize,
     text: SharedString,
     highlights: Vec<Range<usize>>,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_click: Option<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
 ) -> Div {
     let label = section_label(name, part, text.len(), on_click);
     let body = if highlights.is_empty() {
@@ -29,20 +29,23 @@ pub fn section_div(
     div().child(label).child(body)
 }
 
-/// A clickable label naming a section and the length of its shown text.
+/// A label naming a section and the length of its shown text. It is
+/// clickable only when given an `on_click`.
 pub fn section_label(
     name: &str,
     part: usize,
     count: usize,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_click: Option<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
 ) -> impl IntoElement {
-    div()
+    let label = div()
         .id(format!("{name}-{part}"))
         .min_size_0()
         .max_w(px(120.0))
         .py_3()
         .text_color(Hsla::red())
-        .hover(|s| s.underline())
-        .child(format!("Section: {}\nCount: {}", part + 1, count))
-        .on_click(on_click)
+        .child(format!("Section: {}\nCount: {}", part + 1, count));
+    match on_click {
+        Some(on_click) => label.hover(|s| s.underline()).on_click(on_click),
+        None => label,
+    }
 }
