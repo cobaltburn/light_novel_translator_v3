@@ -1,19 +1,32 @@
 use gpui_kit::{
-    App, ClickEvent, Div, Hsla, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px, text,
+    App, ClickEvent, Div, HighlightStyle, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, StyledText,
+    Window, div, px, text,
 };
+use std::ops::Range;
 
-// TODO highlight japanese characters incase of error
-/// A section's text under its [`section_label`].
+/// A section's text under its [`section_label`], with the `highlights` byte
+/// ranges of the text shown in red.
 pub fn section_div(
     name: &str,
     part: usize,
     text: SharedString,
+    highlights: Vec<Range<usize>>,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    div()
-        .child(section_label(name, part, text.len(), on_click))
-        .child(text!(text))
+    let label = section_label(name, part, text.len(), on_click);
+    let body = if highlights.is_empty() {
+        text!(text).into_any_element()
+    } else {
+        let red = HighlightStyle {
+            color: Some(Hsla::red()),
+            ..Default::default()
+        };
+        StyledText::new(text)
+            .with_highlights(highlights.into_iter().map(|range| (range, red)))
+            .into_any_element()
+    };
+    div().child(label).child(body)
 }
 
 /// A clickable label naming a section and the length of its shown text.

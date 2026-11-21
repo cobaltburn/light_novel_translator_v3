@@ -109,7 +109,7 @@ impl Translation {
                     .children(page.text(self.display, self.current_page, cx)),
             )
             .vertical_scrollbar(&self.scroll_handle)
-            .child(page.error_cards(cx))
+            .child(page.error_cards(self.current_page, cx))
     }
 
     /// The text box's context menu: how to display the text, and where to scroll.

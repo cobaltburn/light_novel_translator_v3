@@ -1,7 +1,10 @@
-use crate::page::{ErrorType, Page, PageError};
+use crate::{
+    page::{ErrorType, Page, PageError},
+    widget::page::PageAction,
+};
 use gpui_kit::{
-    App, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    Styled as _,
+    ClickEvent, Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, Styled as _,
     base::v_flex,
     component::{
         ActiveTheme as _,
@@ -12,7 +15,14 @@ use gpui_kit::{
 
 impl Page {
     /// A floating list of the page's empty sections and failed checks.
-    pub fn error_cards(&self, cx: &App) -> impl IntoElement {
+    /// Clicking a card re-runs the translation of its section.
+    pub fn error_cards<T: PageAction>(&self, page: usize, cx: &Context<T>) -> impl IntoElement {
+        let on_click = |part: usize| {
+            cx.listener(move |this, _: &ClickEvent, window, cx| {
+                this.start_section(page, part, window, cx)
+            })
+        };
+
         let empty_buttons = self
             .sections
             .iter()
@@ -23,13 +33,12 @@ impl Page {
                     format!("empty-button-{i}"),
                     format!("Empty Section: {:2}", i + 1),
                 )
+                .on_click(on_click(i))
             });
 
-        let error_buttons = self
-            .errors
-            .iter()
-            .enumerate()
-            .map(|(id, e)| card_button(format!("error-button-{id}"), error_label(e)));
+        let error_buttons = self.errors.iter().enumerate().map(|(id, e)| {
+            card_button(format!("error-button-{id}"), error_label(e)).on_click(on_click(e.index))
+        });
 
         v_flex()
             .p_1()

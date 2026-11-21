@@ -1,5 +1,5 @@
 use crate::{
-    page::Page,
+    page::{ErrorType, Page},
     widget::page::{DisplayType, section_div},
 };
 use gpui_kit::{Context, IntoElement, Window};
@@ -32,9 +32,16 @@ impl Page {
             cx.listener(move |this, _, window, cx| this.start_section(page, part, window, cx))
         };
 
-        self.sections
-            .iter()
-            .enumerate()
-            .map(move |(i, s)| section_div(&name, i, display.section_text(s), on_click(i)))
+        let japanese_error = |part| {
+            self.errors
+                .iter()
+                .any(|e| e.index == part && matches!(e.error, ErrorType::Japanese))
+        };
+
+        self.sections.iter().enumerate().map(move |(i, s)| {
+            let text = display.section_text(s);
+            let highlights = display.section_highlights(&text, japanese_error(i));
+            section_div(&name, i, text, highlights, on_click(i))
+        })
     }
 }

@@ -1,5 +1,5 @@
 use regex::{Captures, Regex};
-use std::sync::LazyLock;
+use std::{ops::Range, sync::LazyLock};
 
 pub fn contains_japanese(text: &str) -> bool {
     text.chars().any(is_japanese_char)
@@ -15,6 +15,19 @@ pub fn is_japanese_char(ch: char) -> bool {
             '\u{FF65}'..='\u{FF9F}' |  // Half-width Katakana
             '\u{31F0}'..='\u{31FF}'    // Katakana Phonetic Extensions
         )
+}
+
+/// Byte ranges of each run of Japanese characters in `text`.
+pub fn japanese_ranges(text: &str) -> Vec<Range<usize>> {
+    let mut ranges: Vec<Range<usize>> = Vec::new();
+    for (i, ch) in text.char_indices().filter(|(_, c)| is_japanese_char(*c)) {
+        let end = i + ch.len_utf8();
+        match ranges.last_mut() {
+            Some(last) if last.end == i => last.end = end,
+            _ => ranges.push(i..end),
+        }
+    }
+    ranges
 }
 
 /// Full-width spaces at the start of a line are Japanese paragraph indents.
@@ -60,7 +73,18 @@ pub fn replace_jp_symbols(text: &str) -> String {
 
 #[cfg(test)]
 mod test {
-    use super::replace_jp_symbols;
+    use super::{japanese_ranges, replace_jp_symbols};
+
+    #[test]
+    fn finds_japanese_runs() {
+        let text = "Hi あい, ok 漢字!";
+        let runs: Vec<_> = japanese_ranges(text)
+            .into_iter()
+            .map(|r| &text[r])
+            .collect();
+        assert_eq!(runs, ["あい", "漢字"]);
+        assert!(japanese_ranges("no japanese").is_empty());
+    }
 
     #[test]
     fn converts_quotes() {

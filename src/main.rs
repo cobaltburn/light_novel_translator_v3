@@ -1,12 +1,7 @@
 use crate::{app::Translator, error::Result};
-use gpui_kit::{
-    AppContext, WindowOptions, application,
-    assets::Assets,
-    component::{Theme, ThemeRegistry},
-    init, open_window,
-};
+use gpui_kit::{AppContext, WindowOptions, application, assets::Assets, init, open_window};
+use std::fs::File;
 use std::sync::Mutex;
-use std::{fs::File, path::PathBuf};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 mod app;
@@ -18,6 +13,7 @@ mod page;
 mod screen;
 mod server;
 mod text;
+mod theme;
 mod widget;
 
 const LOG_FILE: &str = "light_novel_translator.log";
@@ -39,12 +35,7 @@ fn main() -> Result<()> {
 
     application().with_assets(Assets).run(|cx| {
         init(cx);
-        let _ = ThemeRegistry::watch_dir(PathBuf::from("./themes"), cx, |cx| {
-            let themes = ThemeRegistry::global(cx).themes();
-            if let Some(theme) = themes.get("Tokyo Night").cloned() {
-                Theme::update(cx, |current| current.apply_config(&theme))
-            }
-        });
+        theme::init_themes(cx);
 
         open_window(WindowOptions::default(), cx, |window, cx| {
             cx.new(|cx| Translator::new(window, cx))
