@@ -14,11 +14,7 @@ pub struct ServerBuilder {
 }
 
 impl ServerBuilder {
-    pub fn build<T: ServerUpdate + 'static>(
-        self,
-        window: &mut Window,
-        cx: &mut Context<T>,
-    ) -> Server {
+    pub fn build<T: ServerUpdate>(self, window: &mut Window, cx: &mut Context<T>) -> Server {
         let models = cx.new(|cx| SelectState::new(Vec::new(), Some(IndexPath::new(0)), window, cx));
         let inputs = SettingsInputs::new(&self.settings, window, cx);
 

@@ -1,8 +1,7 @@
 use crate::{
-    chapter::Chapter,
     epub::html::{html_to_markdown, html_to_marked_markdown, toc_to_markdown},
     error::Result,
-    page::{Page, TOC_PAGE_PREFIX},
+    page::{Chapter, Page, TOC_PAGE_PREFIX},
     text::{has_translatable_text, markdown_sections},
 };
 use rbook::Epub;
@@ -42,7 +41,7 @@ pub fn get_pages(buffer: Vec<u8>) -> Result<Vec<Page>> {
     Ok(pages)
 }
 
-pub async fn get_chapters(buffer: Vec<u8>) -> Result<Vec<Chapter>> {
+pub fn get_chapters(buffer: Vec<u8>) -> Result<Vec<Chapter>> {
     let epub = Epub::read(Cursor::new(buffer))?;
 
     let path = PathBuf::from(TOC_PAGE_PREFIX).with_extension("xhtml");

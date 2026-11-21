@@ -50,11 +50,13 @@ pub enum Error {
     #[error(transparent)]
     Utf8Error(#[from] std::str::Utf8Error),
 
+    // Boxed, as they are several times larger than the other variants and
+    // would make every `Result` as large. `From` boxes them, so `?` still works.
     #[error(transparent)]
-    PromptError(#[from] rig::run::PromptError),
+    PromptError(Box<rig::run::PromptError>),
 
     #[error(transparent)]
-    ProviderError(#[from] rig::ProviderError),
+    ProviderError(Box<rig::ProviderError>),
 
     #[error(transparent)]
     MemoryError(#[from] rig::memory::SessionError),
@@ -67,6 +69,18 @@ pub enum Error {
 
     #[error(transparent)]
     FutureError(#[from] futures::channel::oneshot::Canceled),
+}
+
+impl From<rig::run::PromptError> for Error {
+    fn from(error: rig::run::PromptError) -> Self {
+        Error::PromptError(Box::new(error))
+    }
+}
+
+impl From<rig::ProviderError> for Error {
+    fn from(error: rig::ProviderError) -> Self {
+        Error::ProviderError(Box::new(error))
+    }
 }
 
 fn page_collisions(collisions: &[Vec<PathBuf>]) -> String {

@@ -22,7 +22,7 @@ impl Section {
 
     pub fn history_message(&self) -> [Message; 2] {
         [
-            Message::user(&self.japanese.to_string()),
+            Message::user(self.japanese.to_string()),
             Message::assistant(&self.content),
         ]
     }
@@ -50,7 +50,6 @@ impl Section {
         self.content = text.join("\n")
     }
 
-    /// The last lines of the translation, to check where it stopped.
     pub fn end_lines(&self) -> String {
         let lines: Vec<_> = self.content.lines().collect();
         lines

@@ -59,13 +59,22 @@ pub async fn select_translated_folder(directory: Option<PathBuf>) -> Option<File
 }
 
 pub async fn complete(file_name: impl AsRef<str>) {
-    let file_name = Path::new(file_name.as_ref())
+    completed("Translation Complete", file_name.as_ref()).await;
+}
+
+pub async fn glossary_complete(file_name: impl AsRef<str>) {
+    completed("Glossary Complete", file_name.as_ref()).await;
+}
+
+/// Tells the user a run over `file_name` finished.
+async fn completed(title: &str, file_name: &str) {
+    let file_name = Path::new(file_name)
         .file_prefix()
         .unwrap_or_default()
         .to_string_lossy();
 
     rfd::AsyncMessageDialog::new()
-        .set_title("Translation Complete")
+        .set_title(title)
         .set_description(file_name)
         .set_buttons(rfd::MessageButtons::Ok)
         .show()

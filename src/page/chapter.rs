@@ -1,5 +1,5 @@
 use crate::page::Activity;
-use std::{ffi::OsStr, path::PathBuf};
+use std::{borrow::Cow, path::PathBuf};
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Default)]
@@ -19,14 +19,7 @@ impl Chapter {
         }
     }
 
-    pub fn file_prefix(&self) -> Option<&OsStr> {
-        self.path.file_prefix()
-    }
-
-    pub fn name(&self) -> String {
-        self.file_prefix()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned()
+    pub fn file_stem(&self) -> Option<Cow<'_, str>> {
+        Some(self.path.file_stem()?.to_string_lossy())
     }
 }

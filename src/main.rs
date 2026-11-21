@@ -10,7 +10,6 @@ use std::{fs::File, path::PathBuf};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 mod app;
-mod chapter;
 mod client;
 mod dialogs;
 mod epub;

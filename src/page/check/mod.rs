@@ -100,7 +100,7 @@ impl Page {
             .enumerate()
             .filter(|(_, s)| !s.content.is_empty())
             .filter_map(|(i, Section { japanese, content })| {
-                (header_tag_count(&japanese) != header_tag_count(&content))
+                (header_tag_count(japanese) != header_tag_count(content))
                     .then_some(PageError::header(i))
             })
             .collect()
@@ -112,8 +112,7 @@ impl Page {
             .enumerate()
             .filter(|(_, s)| !s.content.is_empty())
             .filter_map(|(i, Section { japanese, content })| {
-                (link_tag_count(&japanese) != link_tag_count(&content))
-                    .then_some(PageError::link(i))
+                (link_tag_count(japanese) != link_tag_count(content)).then_some(PageError::link(i))
             })
             .collect()
     }

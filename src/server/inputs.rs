@@ -44,7 +44,7 @@ pub struct SettingsInputs {
 
 impl SettingsInputs {
     /// Inputs showing `settings`, each writing back into the view's settings as it changes.
-    pub fn new<T: ServerUpdate + 'static>(
+    pub fn new<T: ServerUpdate>(
         settings: &Settings,
         window: &mut Window,
         cx: &mut Context<T>,
@@ -85,7 +85,7 @@ fn bound_input<T, V>(
     cx: &mut Context<T>,
 ) -> Entity<InputState>
 where
-    T: ServerUpdate + 'static,
+    T: ServerUpdate,
     V: FromStr + ToString + 'static,
 {
     let input = number_input_entity(value.to_string(), range, window, cx);
@@ -104,7 +104,7 @@ pub fn bind_input<T, V>(
     window: &mut Window,
     cx: &mut Context<'_, T>,
 ) where
-    T: ServerUpdate + 'static,
+    T: ServerUpdate,
     V: FromStr + 'static,
 {
     cx.subscribe_in(input, window, move |this, state, event, _, cx| {

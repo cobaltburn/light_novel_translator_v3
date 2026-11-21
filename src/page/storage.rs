@@ -23,7 +23,7 @@ pub fn page_markdown(page: &Page) -> String {
 
 pub async fn save_translation(pages: &[Page], folder: impl AsRef<Path>) -> Result<()> {
     fs::create_dir(&folder).await?;
-    save_pages(&pages, folder).await?;
+    save_pages(pages, folder).await?;
     Ok(())
 }
 

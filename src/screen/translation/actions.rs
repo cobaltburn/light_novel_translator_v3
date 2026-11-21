@@ -3,7 +3,10 @@ use crate::{
     error::{Error, TaskExt as _},
     page::{Job, page_markdown},
     screen::Translation,
-    widget::page::{DisplayType, PageAction, SidebarAction},
+    widget::{
+        SidebarAction,
+        page::{DisplayType, PageAction, PageSidebarAction},
+    },
 };
 use gpui_kit::{Action, AppContext, Context, Window};
 
@@ -93,24 +96,28 @@ impl PageAction for Translation {
 }
 
 impl SidebarAction for Translation {
+    const RUN_LABELS: [&'static str; 2] = ["translate", "translate page"];
+
     fn save_action(page: usize) -> Box<dyn Action> {
         Box::new(SavePage { page })
     }
 
-    fn all_action(page: usize) -> Box<dyn Action> {
+    fn run_all_action(page: usize) -> Box<dyn Action> {
         Box::new(Translate::All(page))
     }
 
-    fn page_action(page: usize) -> Box<dyn Action> {
+    fn run_one_action(page: usize) -> Box<dyn Action> {
         Box::new(Translate::Page(page))
     }
 
-    fn section_action(page: usize, part: usize) -> Box<dyn Action> {
-        Box::new(Translate::Part { page, part })
-    }
-
-    fn set_page(&mut self, page: usize, cx: &mut Context<Self>) {
+    fn select(&mut self, page: usize, cx: &mut Context<Self>) {
         self.current_page = page;
         cx.notify();
+    }
+}
+
+impl PageSidebarAction for Translation {
+    fn section_action(page: usize, part: usize) -> Box<dyn Action> {
+        Box::new(Translate::Part { page, part })
     }
 }

@@ -1,8 +1,9 @@
 use crate::widget::{ListnerFn, primary_button};
 use gpui_kit::{
-    App, ClickEvent, ElementId, Hsla, IntoElement, ParentElement as _, RenderOnce, SharedString,
-    Styled, Window,
+    App, ClickEvent, ElementId, IntoElement, ParentElement as _, RenderOnce, SharedString, Styled,
+    Window,
     base::{Disableable, h_flex},
+    component::ActiveTheme,
     div, text,
 };
 
@@ -41,7 +42,7 @@ impl LabelButton {
 }
 
 impl RenderOnce for LabelButton {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         h_flex()
             .gap_2()
             .w_full()
@@ -56,7 +57,7 @@ impl RenderOnce for LabelButton {
                     .w_full()
                     .border_1()
                     .rounded_sm()
-                    .border_color(Hsla::white())
+                    .border_color(cx.theme().primary)
                     .child(text!(self.text)),
             )
     }

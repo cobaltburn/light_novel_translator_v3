@@ -45,7 +45,10 @@ fn is_truncated(call: &CompletionCall) -> bool {
 /// An error in the model's reply to one prompt, rather than in reaching the
 /// server, so the run can carry on past it.
 pub fn is_response_report(error: &Error) -> bool {
-    matches!(error, Error::PromptError(PromptError::Report(report)) if report.kind == ErrorKind::Response)
+    let Error::PromptError(error) = error else {
+        return false;
+    };
+    matches!(&**error, PromptError::Report(report) if report.kind == ErrorKind::Response)
 }
 
 #[cfg(test)]

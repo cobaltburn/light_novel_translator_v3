@@ -16,7 +16,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new<T: ServerUpdate + 'static>(window: &mut Window, cx: &mut Context<T>) -> Self {
+    pub fn new<T: ServerUpdate>(window: &mut Window, cx: &mut Context<T>) -> Self {
         ServerBuilder::default().build(window, cx)
     }
 

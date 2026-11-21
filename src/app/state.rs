@@ -1,6 +1,6 @@
 use crate::{
     app::Screen,
-    screen::{format::Format, translation::Translation},
+    screen::{Format, Glossary, Translation},
 };
 use gpui_kit::{AppContext, Context, Entity, Window};
 
@@ -9,15 +9,18 @@ pub struct Translator {
     pub screen: Screen,
     pub active_tab: usize,
     pub translations: Vec<Entity<Translation>>,
+    pub glossary: Entity<Glossary>,
     pub format: Entity<Format>,
 }
 
 impl Translator {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let translation_entity = cx.new(|cx| Translation::new(window, cx));
-        let format = cx.new(|_| Format::default());
+        let format = cx.new(|cx| Format::new(window, cx));
+        let glossary = cx.new(|cx| Glossary::new(window, cx));
         Translator {
             format,
+            glossary,
             active_tab: 0,
             screen: Screen::default(),
             translations: vec![translation_entity],

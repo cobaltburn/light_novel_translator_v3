@@ -26,10 +26,7 @@ impl Server {
             .menu_width(width)
     }
 
-    pub fn server_popover<T: ServerUpdate + 'static>(
-        &self,
-        cx: &mut Context<'_, T>,
-    ) -> impl IntoElement {
+    pub fn server_popover<T: ServerUpdate>(&self, cx: &mut Context<'_, T>) -> impl IntoElement {
         let think_index = THINK_ORDER.iter().position(|t| t == &self.settings.think);
         let method_index = METHOD_ORDER.iter().position(|m| m == &self.method);
 

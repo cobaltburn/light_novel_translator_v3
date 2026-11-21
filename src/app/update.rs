@@ -1,6 +1,7 @@
 use crate::{
     app::{Screen, Translator},
     screen::Translation,
+    server::ServerUpdate as _,
 };
 use gpui_kit::{AppContext, Context, Window};
 

@@ -3,38 +3,47 @@ use crate::{
     widget::{LabelButton, PrimaryBorder as _, primary_button},
 };
 use gpui_kit::{
-    Context, Div, IntoElement, ObjectFit, ParentElement, Styled, StyledImage,
-    base::{h_flex, v_flex},
+    Context, Entity, IntoElement, ObjectFit, ParentElement, Styled, StyledImage,
+    base::{Disableable, h_flex, input::InputState, v_flex},
+    component::{input::Input, label::Label, scroll::ScrollableElement},
     div, img, text,
 };
 
 impl Format {
     /// The source epub, and its cover.
     pub fn epub_column(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        source_column(
-            LabelButton::new(
+        v_flex()
+            .gap_3()
+            .h_full()
+            .w_1_2()
+            .min_size_0()
+            .child(LabelButton::new(
                 "epub-label-button",
                 "epub",
                 self.epub_name().unwrap_or_default(),
                 cx.listener(|this, _, window, cx| this.select_epub(window, cx)),
-            ),
-            self.cover_image(cx),
-        )
+            ))
+            .child(self.cover_image(cx))
     }
 
     /// The folder of translated pages, and the pages in it.
     pub fn content_column(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        source_column(
-            LabelButton::new(
+        v_flex()
+            .gap_3()
+            .h_full()
+            .w_1_2()
+            .min_size_0()
+            .child(LabelButton::new(
                 "content-label-button",
                 "content",
                 self.source_folder.as_ref().map_or_default(|s| s.as_str()),
                 cx.listener(|this, _, window, cx| {
                     this.select_folder(window, cx);
                 }),
-            ),
-            self.content_files(cx),
-        )
+            ))
+            .child(labeled_input("Title:", &self.inputs.title))
+            .child(labeled_input("Authors:", &self.inputs.authors))
+            .child(self.content_files(cx))
     }
 
     pub fn cover_image(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -57,9 +66,11 @@ impl Format {
 
     pub fn content_files(&self, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
+            .p_2()
             .size_full()
             .rounded_sm()
             .primary_border(cx)
+            .overflow_y_scrollbar()
             .children(
                 self.pages
                     .iter()
@@ -69,21 +80,20 @@ impl Format {
     }
 
     pub fn build_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let can_build = self.epub_path.is_some() && self.source_folder.is_some();
         h_flex().w_full().justify_end().child(
             primary_button("build-button", "build")
                 .flex()
+                .disabled(!can_build)
                 .on_click(cx.listener(|this, _, window, cx| this.build_epub(window, cx))),
         )
     }
 }
 
-/// Half of the screen: a picker for one source over a panel showing what was picked.
-fn source_column(picker: LabelButton, panel: impl IntoElement) -> Div {
-    v_flex()
-        .gap_3()
-        .h_full()
-        .w_1_2()
-        .min_size_0()
-        .child(picker)
-        .child(panel)
+/// A text input with a label in front of it.
+fn labeled_input(label: &'static str, state: &Entity<InputState>) -> impl IntoElement {
+    h_flex()
+        .gap_1()
+        .child(Label::new(label))
+        .child(Input::new(state))
 }

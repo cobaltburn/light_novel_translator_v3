@@ -69,7 +69,7 @@ impl Translation {
         !self.server.handles.is_empty()
     }
 
-    pub fn can_translate(&self) -> bool {
+    pub fn can_run(&self) -> bool {
         self.server.connected() && self.file_path.is_some()
     }
 }

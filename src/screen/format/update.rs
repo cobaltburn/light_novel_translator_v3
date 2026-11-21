@@ -10,19 +10,24 @@ use smol::{
     fs::{read_dir, read_to_string},
     stream::StreamExt,
 };
-use std::{io::Cursor, mem, path::PathBuf, sync::Arc};
+use std::{
+    io::Cursor,
+    mem,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 impl Format {
     pub fn select_epub(&self, window: &mut Window, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             if let Some(handle) = select_epub().await {
                 let buffer = handle.read().await;
                 let epub = cx
                     .background_spawn(async { Epub::read(Cursor::new(buffer)) })
                     .await?;
 
-                this.update(cx, |this, cx| {
-                    this.set_epub(handle.path(), epub)?;
+                this.update_in(cx, |this, window, cx| {
+                    this.set_epub(handle.path(), epub, window, cx)?;
                     cx.notify();
                     Ok::<_, Error>(())
                 })??;
@@ -32,7 +37,13 @@ impl Format {
         .detach_and_prompt_err("Failed to open epub", window, cx);
     }
 
-    fn set_epub(&mut self, path: impl Into<PathBuf>, epub: Epub) -> Result<()> {
+    fn set_epub(
+        &mut self,
+        path: impl Into<PathBuf>,
+        epub: Epub,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<()> {
         let path: PathBuf = path.into();
 
         self.cover = epub.manifest().cover_image().and_then(|e| {
@@ -40,19 +51,35 @@ impl Format {
             let format = ImageFormat::from_mime_type(mime_type)?;
             Some(Arc::new(Image::from_bytes(format, e.read_bytes().ok()?)))
         });
-        self.metadata.title = path
+        self.set_title(&path, window, cx);
+        self.set_authors(&epub, window, cx);
+
+        self.epub_path = Some(path);
+        self.epub = Some(epub);
+        Ok(())
+    }
+
+    fn set_title(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
+        let title = path
             .file_prefix()
             .map_or_default(|e| e.to_string_lossy().to_string());
-        self.metadata.authors = epub
+        self.inputs
+            .title
+            .update(cx, |this, cx| this.set_value(title.clone(), window, cx));
+        self.metadata.title = title;
+    }
+
+    fn set_authors(&mut self, epub: &Epub, window: &mut Window, cx: &mut Context<Self>) {
+        let authors = epub
             .metadata()
             .creators()
             .map(|e| e.value())
             .collect::<Vec<_>>()
             .join(" & ");
-
-        self.epub_path = Some(path);
-        self.epub = Some(epub);
-        Ok(())
+        self.inputs
+            .authors
+            .update(cx, |this, cx| this.set_value(authors.clone(), window, cx));
+        self.metadata.authors = authors;
     }
 
     pub fn select_folder(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -83,6 +110,7 @@ impl Format {
 
     pub fn build_epub(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let builder = self.get_build_content();
+        self.inputs.clear(window, cx);
         cx.notify();
 
         cx.spawn(async |_, cx| {

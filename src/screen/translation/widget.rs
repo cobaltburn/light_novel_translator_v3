@@ -2,8 +2,8 @@ use crate::{
     page::Page,
     screen::{ScrollTo, SetDisplay, Translation},
     widget::{
-        LabelButton, PrimaryBorder as _, action_menu, numbered_items, page::DisplayType,
-        primary_button,
+        LabelButton, PrimaryBorder as _, action_menu, entry_sidebar, numbered_items,
+        page::DisplayType, primary_button,
     },
 };
 use gpui_kit::{
@@ -14,7 +14,6 @@ use gpui_kit::{
         menu::{ContextMenuExt, PopupMenu},
         popover::Popover,
         scroll::ScrollableElement,
-        sidebar::Sidebar,
     },
     div, px,
 };
@@ -70,22 +69,18 @@ impl Translation {
             }))
         } else {
             primary_button("translate-button", "translate")
-                .disabled(!self.can_translate())
+                .disabled(!self.can_run())
                 .on_click(cx.listener(Self::translate))
         }
     }
 
     pub fn page_side_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        Sidebar::new("page-sidebar")
-            .h_full()
-            .rounded_md()
-            .primary_border(cx)
-            .children(
-                self.pages
-                    .iter()
-                    .enumerate()
-                    .map(|(i, p)| p.sidebar_menu_item(i, self.current_page == i, self, cx)),
-            )
+        let items = self
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(i, p)| p.sidebar_menu_item(i, self.current_page == i, self, cx));
+        entry_sidebar("page-sidebar", items, cx)
     }
 
     pub fn text_box(&self, cx: &Context<Self>) -> impl IntoElement {
