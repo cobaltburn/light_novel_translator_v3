@@ -1,11 +1,10 @@
 use crate::{
-    message::send,
     page::{ErrorType, Page, PageError},
-    widget::page::PageAction,
+    widget::page::{PageAction, start_section_listener},
 };
 use gpui_kit::{
-    ClickEvent, Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _,
+    Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _,
     base::{Disableable as _, v_flex},
     component::{
         ActiveTheme as _,
@@ -30,7 +29,7 @@ impl Page {
         if self.errors.is_empty() && !self.check_incomplete() {
             return None;
         }
-        let on_click = |part| send(cx, move |_: &ClickEvent| T::start_section(page, part));
+        let on_click = |part| start_section_listener(cx, page, part);
         let empty_buttons = self
             .sections
             .iter()
@@ -66,7 +65,9 @@ impl Page {
                 .bg(cx.theme().popover)
                 .children(self.errors.is_empty().not().then(|| {
                     card_button(format!("error-button-all"), format!("All errors"), running)
-                        .on_click(send(cx, move |_: &ClickEvent| T::start_errors(page)))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.start_errors(page, window, cx)
+                        }))
                 }))
                 .children(empty_buttons.chain(error_buttons)),
         )

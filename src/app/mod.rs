@@ -1,4 +1,3 @@
-pub mod message;
 mod screen;
 mod state;
 mod update;

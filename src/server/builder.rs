@@ -1,7 +1,6 @@
 use crate::{
     client::{Client, Settings},
-    message::Update,
-    server::{Method, Server, SettingsInputs, message::Message},
+    server::{Method, Server, ServerUpdate, SettingsInputs},
 };
 use gpui_kit::{AppContext as _, Context, Window, base::IndexPath, component::select::SelectState};
 
@@ -12,14 +11,17 @@ pub struct ServerBuilder {
     pub client: Client,
     pub settings: Settings,
     pub method: Method,
+    pub model: Option<String>,
 }
 
 impl ServerBuilder {
-    pub fn build<T>(self, window: &mut Window, cx: &mut Context<T>) -> Server
-    where
-        T: Update<Message: From<Message>>,
-    {
-        let models = cx.new(|cx| SelectState::new(Vec::new(), Some(IndexPath::new(0)), window, cx));
+    pub fn build<T: ServerUpdate>(self, window: &mut Window, cx: &mut Context<T>) -> Server {
+        // Until the models load, the list is just the selected model.
+        let (items, selected) = match self.model {
+            Some(model) => (vec![model], Some(IndexPath::new(0))),
+            None => (Vec::new(), None),
+        };
+        let models = cx.new(|cx| SelectState::new(items, selected, window, cx));
         let inputs = SettingsInputs::new(&self.settings, window, cx);
 
         Server {

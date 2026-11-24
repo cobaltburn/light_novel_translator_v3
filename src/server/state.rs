@@ -1,10 +1,9 @@
 use crate::{
     client::{Client, Settings},
     error::{Error, Result},
-    message::Update,
-    server::{Method, ServerBuilder, SettingsInputs, message::Message},
+    server::{Method, ServerBuilder, ServerUpdate, SettingsInputs},
 };
-use gpui_kit::{Context, Entity, Task, Window, component::select::SelectState};
+use gpui_kit::{App, Context, Entity, Task, Window, component::select::SelectState};
 
 #[derive(Debug)]
 pub struct Server {
@@ -17,10 +16,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new<T>(window: &mut Window, cx: &mut Context<T>) -> Self
-    where
-        T: Update<Message: From<Message>>,
-    {
+    pub fn new<T: ServerUpdate>(window: &mut Window, cx: &mut Context<T>) -> Self {
         ServerBuilder::default().build(window, cx)
     }
 
@@ -28,11 +24,12 @@ impl Server {
         self.client.connected()
     }
 
-    pub fn builder(&self) -> ServerBuilder {
+    pub fn builder(&self, cx: &App) -> ServerBuilder {
         ServerBuilder {
             client: self.client.clone(),
             settings: self.settings,
             method: self.method,
+            model: self.models.read(cx).selected_value().cloned(),
         }
     }
 

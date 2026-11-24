@@ -3,14 +3,13 @@
 use crate::{
     client::{Reply, compact_history, is_response_report, reply_stream, seed_history},
     error::Result,
-    message::SendAsync as _,
     page::Activity,
-    screen::{Translation, translation::message::Message},
+    screen::Translation,
     server::TranslationRun,
 };
 use futures::StreamExt as _;
 use gpui_kit::{AsyncWindowContext, WeakEntity};
-use rig::{Agent, message::Message as ChatMessage};
+use rig::{Agent, message::Message};
 
 /// Streams the translation of each part of `run` into `page`, in order.
 pub(super) async fn translate_parts(
@@ -33,17 +32,18 @@ pub(super) async fn translate_parts(
     }
 
     for (part, japanese) in parts {
-        let activity = Activity::Active(part + 1);
-        this.send(cx, Message::SetActivity { page, activity })?;
+        this.update(cx, |this, cx| {
+            this.set_activity(page, Activity::Active(part + 1), cx)
+        })?;
         if let Some(history) = &history
             && let Err(error) = compact_history(history).await
         {
             error.display_error("Failed to compact history", cx).await;
         }
         let result = translate_part(this, &agent, &japanese, page, part, cx).await;
-        this.send(cx, Message::CleanSection { page, part })?;
+        this.update(cx, |this, cx| this.clean_section(page, part, cx))?;
         result?;
-        this.send(cx, Message::Backup)?;
+        this.update_in(cx, |this, window, cx| this.backup(window, cx))?;
     }
     Ok(())
 }
@@ -58,10 +58,12 @@ async fn translate_part(
     part: usize,
     cx: &mut AsyncWindowContext,
 ) -> Result<()> {
-    let mut replies = reply_stream(agent, ChatMessage::user(japanese));
+    let mut replies = reply_stream(agent, Message::user(japanese));
     while let Some(reply) = replies.next().await {
         match reply {
-            Ok(Reply::Text(text)) => this.send(cx, Message::AppendContent { page, part, text })?,
+            Ok(Reply::Text(text)) => {
+                this.update(cx, |this, cx| this.append_content(page, part, &text, cx))?
+            }
             Ok(Reply::Truncated) => log::warn!("Page {page} part {} was cut off", part + 1),
             Err(error) if is_response_report(&error) => {
                 error.display_error("Translation error", cx).await

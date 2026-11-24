@@ -1,8 +1,8 @@
 //! A tab that translates one epub, page by page.
 
 mod actions;
+mod connection;
 mod files;
-pub mod message;
 mod run;
 mod state;
 mod stream;

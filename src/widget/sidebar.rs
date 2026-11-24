@@ -1,10 +1,7 @@
 //! A sidebar listing the entries of a run (pages, chapters), shared by the
 //! screens that run over them.
 
-use crate::{
-    message::{Update, send},
-    widget::{PrimaryBorder as _, action_menu},
-};
+use crate::widget::{PrimaryBorder as _, action_menu};
 use gpui_kit::{
     Action, App, Context, ElementId, Focusable, Styled as _,
     component::{
@@ -15,15 +12,14 @@ use gpui_kit::{
 
 /// What an entry's sidebar item does: select the entry on click, and offer
 /// these actions in its context menu.
-pub trait SidebarAction: Update + Focusable {
+pub trait SidebarAction: Focusable + Sized + 'static {
     /// The menu labels for running from the entry to the end, and the entry alone.
     const RUN_LABELS: [&'static str; 2];
 
     fn save_action(index: usize) -> Box<dyn Action>;
     fn run_all_action(index: usize) -> Box<dyn Action>;
     fn run_one_action(index: usize) -> Box<dyn Action>;
-    /// The message that selects entry `index`.
-    fn select(index: usize) -> Self::Message;
+    fn select(&mut self, index: usize, cx: &mut Context<Self>);
 }
 
 /// A bordered sidebar holding `items`.
@@ -56,7 +52,7 @@ pub fn sidebar_item<T: SidebarAction>(
     let [run_all, run_one] = T::RUN_LABELS;
     SidebarMenuItem::new(format!("{index}. {name}"))
         .active(active)
-        .on_click(send(cx, move |_| T::select(index)))
+        .on_click(cx.listener(move |this, _, _, cx| this.select(index, cx)))
         .context_menu(move |menu, _, _| {
             more_items(
                 action_menu(menu, focus_handle.clone())

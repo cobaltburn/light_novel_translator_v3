@@ -1,45 +1,23 @@
 //! Starting, stopping and queueing translation runs.
-//!
-//! A run takes its jobs from the front of the queue one at a time: each job
-//! is streamed by a task of its own, which ends by sending
-//! [`Message::JobDone`], and `update` then starts the next.
 
 use super::stream::translate_parts;
 use crate::{
-    error::{Error, Result},
-    message::SendAsync as _,
+    error::Result,
     page::{Activity, Job, Page, check_page_at},
-    screen::translation::{Translate, Translation, message::Message},
+    screen::Translation,
     server::TranslationRun,
 };
-use gpui_kit::{Context, Window};
+use gpui_kit::{AsyncWindowContext, ClickEvent, Context, WeakEntity, Window};
 
 impl Translation {
-    /// Starts the run `translate` asks for, unless a run is in progress.
-    pub(super) fn translate(
-        &mut self,
-        translate: Translate,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        // Starting would cancel the run in progress.
-        if self.is_running() {
-            return;
-        }
-        let jobs = match translate {
-            Translate::All(page) => Job::run_from(page, self.pages.len()).collect(),
-            Translate::Page(page) => vec![Job::Page(page)],
-            Translate::Part { page, part } => vec![Job::Part { page, part }],
-            Translate::Errors => self.error_jobs(),
-            Translate::PageErrors(page) => self.pages(page).map_or_default(|p| p.error_jobs(page)),
-        };
+    pub fn translate(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let jobs = Job::run_from(self.current_page, self.pages.len());
         self.start(jobs, window, cx);
     }
 
-    /// Starts a run over `jobs`, replacing the one in progress. The task of the
-    /// job in progress is held in the server's handles, so [`Self::stop`]
-    /// cancels the run by dropping it.
-    pub(super) fn start(
+    /// Starts a run over `jobs`, replacing the one in progress. The run is
+    /// held in the server's handles, so [`Self::stop`] cancels it by dropping it.
+    pub fn start(
         &mut self,
         jobs: impl IntoIterator<Item = Job>,
         window: &mut Window,
@@ -51,7 +29,21 @@ impl Translation {
         }
         self.stop();
         self.pending = jobs.into_iter().collect();
-        self.next_job(window, cx);
+
+        let run = cx.spawn_in(window, async move |this, cx| {
+            let result = run_jobs(&this, cx).await;
+            this.update_in(cx, |this, window, cx| {
+                // This drops the run, so nothing after it may await.
+                this.stop();
+                if let Err(error) = result {
+                    error.prompt("Translation failed", window, cx);
+                }
+                cx.notify();
+            })?;
+            Ok(())
+        });
+        self.server.handles.push(run);
+        cx.notify();
     }
 
     /// Cancels the run, if any.
@@ -62,56 +54,6 @@ impl Translation {
         if let Some(page) = self.pages.iter().position(Page::active) {
             check_page_at(&mut self.pages, page);
         }
-    }
-
-    /// Starts the next queued job, or ends the run when none are left.
-    fn next_job(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (page, prepared) = loop {
-            match self.pending.pop_front() {
-                None => return self.stop(),
-                Some(Job::Finish) => self.show_complete(cx),
-                Some(Job::Page(page)) => break (page, self.prepare_page(page, cx)),
-                Some(Job::Part { page, part }) => {
-                    break (page, self.prepare_part(page, part, cx));
-                }
-            }
-        };
-        let run = match prepared {
-            Ok(run) => run,
-            Err(error) => return self.fail(error, window, cx),
-        };
-        let job = cx.spawn_in(window, async move |this, cx| {
-            let result = translate_parts(&this, page, run, cx).await;
-            // This ends the job, and its handling drops this task, so nothing
-            // after it may await.
-            this.send(cx, Message::JobDone { page, result })
-        });
-        // Dropping the last job's task, which is the one that just ended.
-        self.server.handles = vec![job];
-    }
-
-    /// Completes the job over `page` when it succeeded and moves on to the
-    /// next, or ends the run when it failed.
-    pub(super) fn job_done(
-        &mut self,
-        page: usize,
-        result: Result<()>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match result {
-            Ok(()) => {
-                check_page_at(&mut self.pages, page);
-                self.next_job(window, cx);
-            }
-            Err(error) => self.fail(error, window, cx),
-        }
-    }
-
-    /// Ends the run, reporting the `error` that ended it.
-    fn fail(&mut self, error: Error, window: &mut Window, cx: &mut Context<Self>) {
-        self.stop();
-        error.prompt("Translation failed", window, cx);
     }
 
     /// Readies a whole page: its requests, the history it continues, and the
@@ -133,6 +75,7 @@ impl Translation {
         self.history = run.history.clone().map(|history| (page, history));
         self.pages[page].clear();
         self.mark_active(page, &run);
+        cx.notify();
         Ok(run)
     }
 
@@ -155,6 +98,7 @@ impl Translation {
         current.sections[part].content.clear();
         current.errors.retain(|e| !e.depends_on(part));
         self.mark_active(page, &run);
+        cx.notify();
         Ok(run)
     }
 
@@ -166,4 +110,33 @@ impl Translation {
             self.pages[page].activity = Activity::Active(part + 1);
         }
     }
+
+    /// Checks a translated page.
+    fn complete_page(&mut self, page: usize, cx: &mut Context<Self>) {
+        check_page_at(&mut self.pages, page);
+        cx.notify();
+    }
+}
+
+/// Runs the queued jobs one at a time until none are left.
+async fn run_jobs(this: &WeakEntity<Translation>, cx: &mut AsyncWindowContext) -> Result<()> {
+    while let Some(job) = this.update(cx, |this, _| this.pending.pop_front())? {
+        let (page, run) = match job {
+            Job::Finish => {
+                this.update(cx, |this, cx| this.show_complete(cx))?;
+                continue;
+            }
+            Job::Page(page) => (
+                page,
+                this.update(cx, |this, cx| this.prepare_page(page, cx))??,
+            ),
+            Job::Part { page, part } => (
+                page,
+                this.update(cx, |this, cx| this.prepare_part(page, part, cx))??,
+            ),
+        };
+        translate_parts(this, page, run, cx).await?;
+        this.update(cx, |this, cx| this.complete_page(page, cx))?;
+    }
+    Ok(())
 }

@@ -9,7 +9,6 @@ mod client;
 mod dialogs;
 mod epub;
 mod error;
-mod message;
 mod page;
 mod screen;
 mod server;

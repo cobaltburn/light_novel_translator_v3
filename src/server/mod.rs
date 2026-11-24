@@ -1,7 +1,6 @@
 mod builder;
 mod inputs;
 mod jobs;
-pub mod message;
 mod method;
 mod state;
 mod update;
@@ -12,3 +11,4 @@ pub use inputs::*;
 pub use jobs::*;
 pub use method::*;
 pub use state::*;
+pub use update::*;

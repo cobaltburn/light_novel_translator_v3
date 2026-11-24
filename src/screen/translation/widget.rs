@@ -1,7 +1,6 @@
 use crate::{
-    message::send,
     page::Page,
-    screen::{ScrollTo, SetDisplay, Translate, Translation, translation::message::Message},
+    screen::{ScrollTo, SetDisplay, Translate, Translation},
     widget::{
         LabelButton, PrimaryBorder as _, action_menu, entry_sidebar, numbered_items,
         page::DisplayType, primary_button,
@@ -40,20 +39,15 @@ impl Translation {
             .anchor(Anchor::TopLeft)
             .trigger(primary_button("epub-trigger", "epub"))
             .child(
-                LabelButton::new(
-                    "epub-button",
-                    "epub",
-                    epub,
-                    send(cx, |_| Message::SelectEpub),
-                )
-                .disable(running),
+                LabelButton::new("epub-button", "epub", epub, cx.listener(Self::select_epub))
+                    .disable(running),
             )
             .child(
                 LabelButton::new(
                     "glossary-button",
                     "glossary",
                     self.glossary_name().unwrap_or_default(),
-                    send(cx, |_| Message::SelectGlossary),
+                    cx.listener(Self::select_glossary),
                 )
                 .disable(running || self.file_path.is_none()),
             )
@@ -61,10 +55,10 @@ impl Translation {
                 h_flex().justify_center().items_center().gap_2().children([
                     primary_button("save-button", "save")
                         .disabled(running)
-                        .on_click(send(cx, |_| Message::Save)),
+                        .on_click(cx.listener(Self::save)),
                     primary_button("recover-button", "recover")
                         .disabled(running)
-                        .on_click(send(cx, |_| Message::Recover)),
+                        .on_click(cx.listener(Self::recover)),
                 ]),
             )
     }
@@ -74,7 +68,10 @@ impl Translation {
     pub fn translate_button(&self, cx: &mut Context<Self>) -> AnyElement {
         if self.is_running() {
             return primary_button("cancel-button", "cancel")
-                .on_click(send(cx, |_| Message::Stop))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.stop();
+                    cx.notify();
+                }))
                 .into_any_element();
         }
         let focus_handle = self.focus_handle.clone();
@@ -85,7 +82,7 @@ impl Translation {
             .disabled(!self.can_run())
             .button(
                 primary_button("translate-button", "translate")
-                    .on_click(send(cx, |_| Message::TranslateFromCurrent)),
+                    .on_click(cx.listener(Self::translate)),
             )
             .dropdown_menu_with_anchor(Anchor::TopCenter, move |menu, _, _| {
                 action_menu(menu, focus_handle.clone()).menu_with_disabled(
@@ -118,9 +115,7 @@ impl Translation {
                 let theme = cx.theme();
                 style.border_color(theme.accent).bg(theme.drop_target)
             })
-            .on_drop(send(cx, |paths: &ExternalPaths| {
-                Message::DropEpub(paths.clone())
-            }))
+            .on_drop(cx.listener(Self::on_drop_epub))
             .children(self.current_page().map(|page| self.page_text(page, cx)))
             .context_menu(self.text_menu())
     }

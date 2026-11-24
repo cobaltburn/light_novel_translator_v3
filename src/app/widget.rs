@@ -1,6 +1,5 @@
 use crate::{
-    app::{Translator, message::Message},
-    message::send,
+    app::Translator,
     widget::{AddButton, CloseButton},
 };
 use gpui_kit::{
@@ -15,12 +14,18 @@ use gpui_kit::{
 impl Translator {
     pub fn tab_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         TabBar::new("translation-tab-bar")
-            .on_click(send(cx, |i: &usize| Message::SelectTab(*i)))
+            .on_click(cx.listener(|this, i, _, cx| {
+                this.active_tab = *i;
+                cx.notify();
+            }))
             .selected_index(self.active_tab)
             .children(self.tabs(cx))
             .suffix(AddButton::new(
                 "tab-bar-suffix",
-                send(cx, |_| Message::NewTab),
+                cx.listener(|this, _, window, cx| {
+                    this.new_tab(window, cx);
+                    cx.notify();
+                }),
             ))
     }
 
@@ -36,12 +41,13 @@ impl Translator {
             })
             .enumerate()
             .map(|(i, tab)| {
-                let close = send(cx, move |_| Message::CloseTab(i));
-                // Without this, the click would also select the tab being closed.
-                tab.suffix(CloseButton::new(i, move |event, window, cx| {
-                    cx.stop_propagation();
-                    close(event, window, cx);
-                }))
+                tab.suffix(CloseButton::new(
+                    i,
+                    cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.close_tab(i, cx);
+                    }),
+                ))
             })
     }
 }

@@ -1,6 +1,5 @@
 use crate::{
-    message::send,
-    screen::format::{Format, message::Message},
+    screen::format::Format,
     widget::{LabelButton, PrimaryBorder as _, primary_button},
 };
 use gpui_kit::{
@@ -22,7 +21,7 @@ impl Format {
                 "epub-label-button",
                 "epub",
                 self.epub_name().unwrap_or_default(),
-                send(cx, |_| Message::SelectEpub),
+                cx.listener(|this, _, window, cx| this.select_epub(window, cx)),
             ))
             .child(self.cover_image(cx))
     }
@@ -38,7 +37,9 @@ impl Format {
                 "content-label-button",
                 "content",
                 self.source_folder.as_ref().map_or_default(|s| s.as_str()),
-                send(cx, |_| Message::SelectFolder),
+                cx.listener(|this, _, window, cx| {
+                    this.select_folder(window, cx);
+                }),
             ))
             .child(labeled_input("Title:", &self.inputs.title))
             .child(labeled_input("Authors:", &self.inputs.authors))
@@ -58,9 +59,7 @@ impl Format {
                 let theme = cx.theme();
                 style.border_color(theme.accent).bg(theme.drop_target)
             })
-            .on_drop(send(cx, |paths: &ExternalPaths| {
-                Message::DropEpub(paths.clone())
-            }))
+            .on_drop(cx.listener(Self::on_drop_epub))
             .children(self.cover.as_ref().map(|image| {
                 img(image.clone())
                     .absolute()
@@ -81,9 +80,7 @@ impl Format {
                 let theme = cx.theme();
                 style.border_color(theme.accent).bg(theme.drop_target)
             })
-            .on_drop(send(cx, |paths: &ExternalPaths| {
-                Message::DropFolder(paths.clone())
-            }))
+            .on_drop(cx.listener(Self::on_drop_folder))
             .child(
                 v_flex().p_2().size_full().overflow_y_scrollbar().children(
                     self.pages
@@ -100,7 +97,7 @@ impl Format {
             primary_button("build-button", "build")
                 .flex()
                 .disabled(!can_build)
-                .on_click(send(cx, |_| Message::Build)),
+                .on_click(cx.listener(|this, _, window, cx| this.build_epub(window, cx))),
         )
     }
 }

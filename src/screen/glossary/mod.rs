@@ -1,9 +1,8 @@
 mod actions;
+mod connection;
 mod files;
-pub mod message;
 mod run;
 mod state;
-mod update;
 mod view;
 mod widget;
 

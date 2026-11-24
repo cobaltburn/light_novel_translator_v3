@@ -1,15 +1,38 @@
 use crate::{
-    message::{Update, send},
     page::{ErrorType, Page},
     text::japanese_ranges,
     widget::page::{DisplayType, section_div},
 };
-use gpui_kit::{ClickEvent, Context, IntoElement};
+use gpui_kit::{App, ClickEvent, Context, IntoElement, Window};
 
-pub trait PageAction: Update {
-    fn start_section(page: usize, part: usize) -> Self::Message;
+/// What clicking a section's label or error card does.
+pub trait PageAction: Sized + 'static {
+    fn start_section(
+        &mut self,
+        page: usize,
+        part: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    );
 
-    fn start_errors(page: usize) -> Self::Message;
+    /// Re-runs every failed section of page `page`.
+    fn start_errors(&mut self, page: usize, window: &mut Window, cx: &mut Context<Self>);
+}
+
+/// A click handler that calls [`PageAction::start_section`] for section `part` of page `page`.
+///
+/// This does what `cx.listener` does, but builds the closure itself: the type
+/// `cx.listener` returns keeps `cx` borrowed, and this one doesn't.
+pub fn start_section_listener<T: PageAction>(
+    cx: &Context<T>,
+    page: usize,
+    part: usize,
+) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static + use<T> {
+    let view = cx.entity().downgrade();
+    move |_, window, cx| {
+        view.update(cx, |this, cx| this.start_section(page, part, window, cx))
+            .ok();
+    }
 }
 
 impl Page {
@@ -43,8 +66,7 @@ impl Page {
             } else {
                 Vec::new()
             };
-            let on_click =
-                (!running).then(|| send(cx, move |_: &ClickEvent| T::start_section(page, i)));
+            let on_click = (!running).then(|| start_section_listener(cx, page, i));
             section_div(&name, i, text, highlights, on_click)
         })
     }
