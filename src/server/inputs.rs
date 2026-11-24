@@ -1,13 +1,13 @@
 use crate::{
     client::Settings,
-    server::ServerUpdate,
+    message::Update,
+    server::message::{Message, SettingsField},
     widget::{NumberRange, number_input_entity},
 };
 use gpui_kit::{
     Context, Entity, Window,
     base::input::{InputEvent, InputState},
 };
-use std::str::FromStr;
 
 const USIZE_STEP: f64 = 1.0;
 const F64_STEP: f64 = 0.05;
@@ -43,32 +43,31 @@ pub struct SettingsInputs {
 }
 
 impl SettingsInputs {
-    /// Inputs showing `settings`, each writing back into the view's settings as it changes.
-    pub fn new<T: ServerUpdate>(
-        settings: &Settings,
-        window: &mut Window,
-        cx: &mut Context<T>,
-    ) -> Self {
+    /// Inputs showing `settings`, each sending its text to the view's server as it changes.
+    pub fn new<T>(settings: &Settings, window: &mut Window, cx: &mut Context<T>) -> Self
+    where
+        T: Update<Message: From<Message>>,
+    {
         Self {
             context_window: bound_input(
                 settings.context_window,
                 CONTEXT_WINDOW_RANGE,
-                |s| &mut s.context_window,
+                SettingsField::ContextWindow,
                 window,
                 cx,
             ),
             temperature: bound_input(
                 settings.temperature,
                 TEMPERATURE_RANGE,
-                |s| &mut s.temperature,
+                SettingsField::Temperature,
                 window,
                 cx,
             ),
-            top_p: bound_input(settings.top_p, TOP_P_RANGE, |s| &mut s.top_p, window, cx),
+            top_p: bound_input(settings.top_p, TOP_P_RANGE, SettingsField::TopP, window, cx),
             repeat_penalty: bound_input(
                 settings.repeat_penalty,
                 REPEAT_PENALTY_RANGE,
-                |s| &mut s.repeat_penalty,
+                SettingsField::RepeatPenalty,
                 window,
                 cx,
             ),
@@ -77,44 +76,40 @@ impl SettingsInputs {
 }
 
 /// A number input starting at `value`, bound to `field` of the settings.
-fn bound_input<T, V>(
-    value: V,
+fn bound_input<T>(
+    value: impl ToString,
     range: NumberRange,
-    field: fn(&mut Settings) -> &mut V,
+    field: SettingsField,
     window: &mut Window,
     cx: &mut Context<T>,
 ) -> Entity<InputState>
 where
-    T: ServerUpdate,
-    V: FromStr + ToString + 'static,
+    T: Update<Message: From<Message>>,
 {
     let input = number_input_entity(value.to_string(), range, window, cx);
     bind_input(&input, field, window, cx);
     input
 }
 
-/// Keeps a cached settings value in sync with its input.
+/// Keeps a settings value in sync with its input, by sending the input's
+/// text each time it changes. The server ignores text that doesn't parse.
 ///
 /// Typing and the +/- buttons (stepping is internal because `step`/`min`/`max`
 /// are set) both emit `InputEvent::Change`, so this one handler covers both.
-/// Text that doesn't parse yet (e.g. "" or "0.") leaves the last value in place.
-pub fn bind_input<T, V>(
+fn bind_input<T>(
     input: &Entity<InputState>,
-    field: fn(&mut Settings) -> &mut V,
+    field: SettingsField,
     window: &mut Window,
     cx: &mut Context<'_, T>,
 ) where
-    T: ServerUpdate,
-    V: FromStr + 'static,
+    T: Update<Message: From<Message>>,
 {
-    cx.subscribe_in(input, window, move |this, state, event, _, cx| {
+    cx.subscribe_in(input, window, move |this, state, event, window, cx| {
         if !matches!(event, InputEvent::Change) {
             return;
         }
-        if let Ok(value) = state.read(cx).value().trim().parse::<V>() {
-            *field(this.settings_mut()) = value;
-            cx.notify();
-        }
+        let text = state.read(cx).value().to_string();
+        this.dispatch(Message::SettingChanged(field, text).into(), window, cx);
     })
     .detach();
 }

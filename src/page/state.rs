@@ -1,4 +1,4 @@
-use crate::page::{PageError, Section};
+use crate::page::{Job, PageError, Section};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -58,6 +58,13 @@ impl Page {
         indexes.sort_unstable();
         indexes.dedup();
         indexes
+    }
+
+    pub fn error_jobs(&self, page: usize) -> Vec<Job> {
+        self.error_indexes()
+            .into_iter()
+            .map(move |part| Job::Part { page, part })
+            .collect()
     }
 }
 

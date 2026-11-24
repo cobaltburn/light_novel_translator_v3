@@ -1,4 +1,7 @@
-use crate::app::{Screen, Translator};
+use crate::{
+    app::{Screen, Translator, message::Message},
+    message::send,
+};
 use gpui_kit::{
     Context, IntoElement, ParentElement, Render, Styled, Window,
     base::{h_flex, v_flex},
@@ -18,9 +21,7 @@ impl Render for Translator {
                         .children(screens.into_iter().map(|screen| {
                             SidebarMenuItem::new(screen.to_string())
                                 .text_base()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.set_screen(screen, cx);
-                                }))
+                                .on_click(send(cx, move |_| Message::SetScreen(screen)))
                         })),
                 ),
             )

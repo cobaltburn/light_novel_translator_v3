@@ -43,7 +43,11 @@ impl Translation {
     }
 
     pub fn current_page(&self) -> Option<&Page> {
-        self.pages.get(self.current_page)
+        self.pages(self.current_page)
+    }
+
+    pub fn pages(&self, index: usize) -> Option<&Page> {
+        self.pages.get(index)
     }
 
     /// Every page up to and including `page`, the context its translation continues.
@@ -53,6 +57,10 @@ impl Translation {
 
     pub fn epub_name(&self) -> Option<Cow<'_, str>> {
         Some(self.file_path.as_ref()?.file_name()?.to_string_lossy())
+    }
+
+    pub fn epub_stem(&self) -> Option<Cow<'_, str>> {
+        Some(self.file_path.as_ref()?.file_stem()?.to_string_lossy())
     }
 
     pub fn glossary_name(&self) -> Option<Cow<'_, str>> {
@@ -71,6 +79,15 @@ impl Translation {
 
     pub fn can_run(&self) -> bool {
         self.server.connected() && self.file_path.is_some()
+    }
+
+    pub fn error_jobs(&self) -> Vec<Job> {
+        self.pages
+            .iter()
+            .enumerate()
+            .map(|(page, p)| p.error_jobs(page))
+            .flatten()
+            .collect()
     }
 }
 

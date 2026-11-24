@@ -6,13 +6,14 @@ use crate::{
         rewind_history, seed_history,
     },
     error::{Error, Result},
+    message::SendAsync as _,
     page::Activity,
-    screen::Translation,
+    screen::{Translation, translation::message::Message},
     server::TranslationRun,
 };
 use futures::StreamExt as _;
 use gpui_kit::{AsyncWindowContext, WeakEntity};
-use rig::{Agent, message::Message};
+use rig::{Agent, message::Message as ChatMessage};
 
 /// Streams the translation of each part of `run` into `page`, in order.
 pub(super) async fn translate_parts(
@@ -35,9 +36,8 @@ pub(super) async fn translate_parts(
     }
 
     for (part, japanese) in parts {
-        this.update(cx, |this, cx| {
-            this.set_activity(page, Activity::Active(part + 1), cx)
-        })?;
+        let activity = Activity::Active(part + 1);
+        this.send(cx, Message::SetActivity { page, activity })?;
         if let Some(history) = &history
             && let Err(error) = compact_history(history).await
         {
@@ -46,7 +46,7 @@ pub(super) async fn translate_parts(
         let result =
             translate_part(this, &agent, history.as_ref(), &japanese, page, part, cx).await;
         // TODO think about adding saving back up after every complete section
-        this.update(cx, |this, cx| this.clean_section(page, part, cx))?;
+        this.send(cx, Message::CleanSection { page, part })?;
         result?;
     }
     Ok(())
@@ -94,7 +94,7 @@ async fn translate_part(
         log::warn!("Page {page} part {} {reason}, retrying", part + 1);
         retried = true;
 
-        this.update(cx, |this, cx| this.clear_section(page, part, cx))?;
+        this.send(cx, Message::ClearSection { page, part })?;
         if let Some((history, len)) = mark
             && let Err(error) = rewind_history(history, len).await
         {
@@ -115,13 +115,11 @@ async fn stream_part(
     last: bool,
     cx: &mut AsyncWindowContext,
 ) -> Result<Attempt> {
-    let mut replies = reply_stream(agent, Message::user(japanese));
+    let mut replies = reply_stream(agent, ChatMessage::user(japanese));
     let mut truncated = false;
     while let Some(reply) = replies.next().await {
         match reply {
-            Ok(Reply::Text(text)) => {
-                this.update(cx, |this, cx| this.append_content(page, part, &text, cx))?
-            }
+            Ok(Reply::Text(text)) => this.send(cx, Message::AppendContent { page, part, text })?,
             Ok(Reply::Truncated) => truncated = true,
             Err(error) if last && is_response_report(&error) => {
                 error.display_error("Translation error", cx).await

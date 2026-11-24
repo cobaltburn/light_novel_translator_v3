@@ -1,17 +1,19 @@
 use crate::{
+    message::send,
     page::Page,
-    screen::{ScrollTo, SetDisplay, Translation},
+    screen::{ScrollTo, SetDisplay, Translate, Translation, translation::message::Message},
     widget::{
         LabelButton, PrimaryBorder as _, action_menu, entry_sidebar, numbered_items,
         page::DisplayType, primary_button,
     },
 };
 use gpui_kit::{
-    Anchor, Context, ExternalPaths, InteractiveElement as _, IntoElement, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, Window,
+    Anchor, AnyElement, Context, ExternalPaths, InteractiveElement as _, IntoElement,
+    ParentElement as _, StatefulInteractiveElement as _, Styled as _, Window,
     base::{Disableable, StyledExt as _, h_flex},
     component::{
         ActiveTheme,
+        button::{ButtonVariants as _, DropdownButton},
         menu::{ContextMenuExt, PopupMenu},
         popover::Popover,
         scroll::ScrollableElement,
@@ -31,22 +33,27 @@ impl Translation {
 
     pub fn epub_popover(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let running = self.is_running();
-        let epub = self.epub_name().unwrap_or_default();
+        let epub = self.epub_stem().unwrap_or_default();
         Popover::new("epub-popover")
             .gap_3()
-            .min_w(px(450.0))
+            .w(px(500.0))
             .anchor(Anchor::TopLeft)
             .trigger(primary_button("epub-trigger", "epub"))
             .child(
-                LabelButton::new("epub-button", "epub", epub, cx.listener(Self::select_epub))
-                    .disable(running),
+                LabelButton::new(
+                    "epub-button",
+                    "epub",
+                    epub,
+                    send(cx, |_| Message::SelectEpub),
+                )
+                .disable(running),
             )
             .child(
                 LabelButton::new(
                     "glossary-button",
                     "glossary",
                     self.glossary_name().unwrap_or_default(),
-                    cx.listener(Self::select_glossary),
+                    send(cx, |_| Message::SelectGlossary),
                 )
                 .disable(running || self.file_path.is_none()),
             )
@@ -54,25 +61,40 @@ impl Translation {
                 h_flex().justify_center().items_center().gap_2().children([
                     primary_button("save-button", "save")
                         .disabled(running)
-                        .on_click(cx.listener(Self::save)),
+                        .on_click(send(cx, |_| Message::Save)),
                     primary_button("recover-button", "recover")
                         .disabled(running)
-                        .on_click(cx.listener(Self::recover)),
+                        .on_click(send(cx, |_| Message::Recover)),
                 ]),
             )
     }
 
-    pub fn translate_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Translates from the current page, with a menu for retrying every failed
+    /// section of the book. While running, it cancels the run instead.
+    pub fn translate_button(&self, cx: &mut Context<Self>) -> AnyElement {
         if self.is_running() {
-            primary_button("cancel-button", "cancel").on_click(cx.listener(|this, _, _, cx| {
-                this.stop();
-                cx.notify();
-            }))
-        } else {
-            primary_button("translate-button", "translate")
-                .disabled(!self.can_run())
-                .on_click(cx.listener(Self::translate))
+            return primary_button("cancel-button", "cancel")
+                .on_click(send(cx, |_| Message::Stop))
+                .into_any_element();
         }
+        let focus_handle = self.focus_handle.clone();
+        let errors = self.error_jobs().len();
+        DropdownButton::new("translate-dropdown")
+            .primary()
+            .outline()
+            .disabled(!self.can_run())
+            .button(
+                primary_button("translate-button", "translate")
+                    .on_click(send(cx, |_| Message::TranslateFromCurrent)),
+            )
+            .dropdown_menu_with_anchor(Anchor::TopCenter, move |menu, _, _| {
+                action_menu(menu, focus_handle.clone()).menu_with_disabled(
+                    format!("retry all errors ({errors})"),
+                    Box::new(Translate::Errors),
+                    errors == 0,
+                )
+            })
+            .into_any_element()
     }
 
     pub fn page_side_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -96,7 +118,9 @@ impl Translation {
                 let theme = cx.theme();
                 style.border_color(theme.accent).bg(theme.drop_target)
             })
-            .on_drop(cx.listener(Self::on_drop_epub))
+            .on_drop(send(cx, |paths: &ExternalPaths| {
+                Message::DropEpub(paths.clone())
+            }))
             .children(self.current_page().map(|page| self.page_text(page, cx)))
             .context_menu(self.text_menu())
     }
@@ -133,7 +157,7 @@ impl Translation {
                     menu.menu_with_check(item.label(), display == item, Box::new(SetDisplay(item)))
                 },
             );
-            numbered_items(menu, sections, "section", false, |part| {
+            numbered_items(menu.separator(), sections, "section", false, |part| {
                 Box::new(ScrollTo { part })
             })
         }

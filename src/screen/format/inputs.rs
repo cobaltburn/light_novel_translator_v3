@@ -1,4 +1,7 @@
-use crate::{epub::EpubMetadata, screen::format::Format};
+use crate::{
+    message::Update as _,
+    screen::format::{Format, message::Message},
+};
 use gpui_kit::{
     AppContext as _, Context, Entity, Window,
     base::input::{InputEvent, InputState},
@@ -14,9 +17,9 @@ pub struct EpubMetadataInput {
 impl EpubMetadataInput {
     pub fn new(window: &mut Window, cx: &mut Context<Format>) -> Self {
         let title = cx.new(|cx| InputState::new(window, cx));
-        bind_input(&title, |e| &mut e.title, window, cx);
+        bind_input(&title, Message::TitleChanged, window, cx);
         let authors = cx.new(|cx| InputState::new(window, cx));
-        bind_input(&authors, |e| &mut e.authors, window, cx);
+        bind_input(&authors, Message::AuthorsChanged, window, cx);
 
         Self { title, authors }
     }
@@ -27,19 +30,18 @@ impl EpubMetadataInput {
     }
 }
 
+/// Sends the message `changed` builds from the input's text each time it changes.
 fn bind_input(
     input: &Entity<InputState>,
-    field: fn(&mut EpubMetadata) -> &mut String,
+    changed: fn(String) -> Message,
     window: &mut Window,
     cx: &mut Context<'_, Format>,
 ) {
-    cx.subscribe_in(input, window, move |this, state, event, _, cx| {
-        if !matches!(event, InputEvent::Change) {
-            return;
+    cx.subscribe_in(input, window, move |this, state, event, window, cx| {
+        if matches!(event, InputEvent::Change) {
+            let value = state.read(cx).value().to_string();
+            this.dispatch(changed(value), window, cx);
         }
-        let value = state.read(cx).value();
-        *field(&mut this.metadata) = value.to_string();
-        cx.notify();
     })
     .detach();
 }

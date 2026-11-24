@@ -2,7 +2,8 @@ use crate::{
     dialogs::{save_epub, select_epub, select_translated_folder},
     epub::{DocBuilder, FormatPage},
     error::{Error, Result, TaskExt as _},
-    screen::format::Format,
+    message::{SendAsync as _, Update},
+    screen::format::{Format, message::Message},
 };
 use gpui_kit::{AppContext as _, Context, ExternalPaths, Image, ImageFormat, Window};
 use rbook::Epub;
@@ -17,32 +18,47 @@ use std::{
     sync::Arc,
 };
 
+impl Update for Format {
+    type Message = Message;
+
+    fn update(&mut self, message: Message, window: &mut Window, cx: &mut Context<Self>) {
+        match message {
+            Message::SelectEpub => self.select_epub(window, cx),
+            Message::DropEpub(paths) => self.drop_epub(&paths, window, cx),
+            Message::SelectFolder => self.select_folder(window, cx),
+            Message::DropFolder(paths) => self.drop_folder(&paths, window, cx),
+            Message::TitleChanged(title) => self.metadata.title = title,
+            Message::AuthorsChanged(authors) => self.metadata.authors = authors,
+            Message::Build => self.build_epub(window, cx),
+            Message::EpubLoaded(path, epub) => {
+                if let Err(error) = self.set_epub(path, *epub, window, cx) {
+                    error.prompt("Failed to open epub", window, cx);
+                }
+            }
+            Message::FolderLoaded(source_folder, pages) => self.set_pages(source_folder, pages),
+        }
+    }
+}
+
 impl Format {
-    pub fn select_epub(&self, window: &mut Window, cx: &mut Context<Self>) {
+    fn select_epub(&self, window: &mut Window, cx: &mut Context<Self>) {
         cx.spawn_in(window, async move |this, cx| {
             if let Some(handle) = select_epub().await {
                 let buffer = handle.read().await;
                 let epub = cx
                     .background_spawn(async { Epub::read(Cursor::new(buffer)) })
                     .await?;
-
-                this.update_in(cx, |this, window, cx| {
-                    this.set_epub(handle.path(), epub, window, cx)?;
-                    cx.notify();
-                    Ok::<_, Error>(())
-                })??;
+                this.send(
+                    cx,
+                    Message::EpubLoaded(handle.path().into(), Box::new(epub)),
+                )?;
             }
             Ok(())
         })
         .detach_and_prompt_err("Failed to open epub", window, cx);
     }
 
-    pub fn on_drop_epub(
-        &mut self,
-        paths: &ExternalPaths,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn drop_epub(&self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
         if paths.paths().len() != 1 {
             return;
         }
@@ -55,24 +71,14 @@ impl Format {
                 let epub = cx
                     .background_spawn(async { Epub::read(Cursor::new(buffer)) })
                     .await?;
-
-                this.update_in(cx, |this, window, cx| {
-                    this.set_epub(path, epub, window, cx)?;
-                    cx.notify();
-                    Ok::<_, Error>(())
-                })??;
+                this.send(cx, Message::EpubLoaded(path, Box::new(epub)))?;
                 Ok(())
             })
             .detach_and_prompt_err("Failed to load epub", window, cx);
         };
     }
 
-    pub fn on_drop_folder(
-        &mut self,
-        paths: &ExternalPaths,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn drop_folder(&self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
         if paths.paths().len() != 1 {
             return;
         }
@@ -84,12 +90,8 @@ impl Format {
                 let pages = cx
                     .background_spawn(read_markdown_files(folder_path))
                     .await?;
-
-                this.update(cx, |this, cx| {
-                    let file_name = path.file_name().map_or_default(|s| s.to_string_lossy());
-                    this.set_pages(file_name, pages);
-                    cx.notify();
-                })?;
+                let file_name = path.file_name().map_or_default(|s| s.to_string_lossy());
+                this.send(cx, Message::FolderLoaded(file_name.into_owned(), pages))?;
                 Ok(())
             })
             .detach_and_prompt_err("Failed to load markdown", window, cx);
@@ -141,7 +143,7 @@ impl Format {
         self.metadata.authors = authors;
     }
 
-    pub fn select_folder(&self, window: &mut Window, cx: &mut Context<Self>) {
+    fn select_folder(&self, window: &mut Window, cx: &mut Context<Self>) {
         let dir = self
             .epub_path
             .as_ref()
@@ -152,10 +154,7 @@ impl Format {
                 let pages = cx
                     .background_spawn(read_markdown_files(folder_path))
                     .await?;
-                this.update(cx, |this, cx| {
-                    this.set_pages(handle.file_name(), pages);
-                    cx.notify();
-                })?;
+                this.send(cx, Message::FolderLoaded(handle.file_name(), pages))?;
             }
             Ok(())
         })
@@ -167,10 +166,9 @@ impl Format {
         self.source_folder = Some(source_folder.into());
     }
 
-    pub fn build_epub(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn build_epub(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let builder = self.get_build_content();
         self.inputs.clear(window, cx);
-        cx.notify();
 
         cx.spawn(async |_, cx| {
             let (content, file_name) = cx.background_spawn(async move { builder?.build() }).await?;

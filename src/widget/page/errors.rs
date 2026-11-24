@@ -1,10 +1,11 @@
 use crate::{
+    message::send,
     page::{ErrorType, Page, PageError},
-    widget::page::{PageAction, start_section_listener},
+    widget::page::PageAction,
 };
 use gpui_kit::{
-    Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _,
+    ClickEvent, Context, ElementId, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _,
     base::{Disableable as _, v_flex},
     component::{
         ActiveTheme as _,
@@ -12,6 +13,7 @@ use gpui_kit::{
     },
     px,
 };
+use std::ops::Not;
 
 impl Page {
     /// A floating list of the page's empty sections and failed checks, or
@@ -28,7 +30,7 @@ impl Page {
         if self.errors.is_empty() && !self.check_incomplete() {
             return None;
         }
-        let on_click = |part| start_section_listener(cx, page, part);
+        let on_click = |part| send(cx, move |_: &ClickEvent| T::start_section(page, part));
         let empty_buttons = self
             .sections
             .iter()
@@ -57,11 +59,15 @@ impl Page {
                 .right_4()
                 .occlude()
                 .absolute()
-                .rounded_md()
                 .min_h_0()
+                .rounded_md()
                 .max_h(px(300.0))
                 .overflow_y_scroll()
                 .bg(cx.theme().popover)
+                .children(self.errors.is_empty().not().then(|| {
+                    card_button(format!("error-button-all"), format!("All errors"), running)
+                        .on_click(send(cx, move |_: &ClickEvent| T::start_errors(page)))
+                }))
                 .children(empty_buttons.chain(error_buttons)),
         )
     }

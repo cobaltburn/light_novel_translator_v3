@@ -1,6 +1,7 @@
 use crate::{
     client::{THINK_ORDER, Think},
-    server::{METHOD_ORDER, Server, ServerUpdate},
+    message::{Update, send},
+    server::{METHOD_ORDER, Server, message::Message},
     widget::primary_button,
 };
 use gpui_kit::{
@@ -26,7 +27,10 @@ impl Server {
             .menu_width(width)
     }
 
-    pub fn server_popover<T: ServerUpdate>(&self, cx: &mut Context<'_, T>) -> impl IntoElement {
+    pub fn server_popover<T>(&self, cx: &mut Context<'_, T>) -> impl IntoElement
+    where
+        T: Update<Message: From<Message>>,
+    {
         let think_index = THINK_ORDER.iter().position(|t| t == &self.settings.think);
         let method_index = METHOD_ORDER.iter().position(|m| m == &self.method);
 
@@ -35,25 +39,22 @@ impl Server {
             .trigger(primary_button("server-trigger", "Server"))
             .child(labeled_row(
                 "Server:",
-                primary_button("server-button", "connect").on_click(cx.listener(
-                    |this, _, window, cx| {
-                        this.connect(window, cx);
-                    },
-                )),
+                primary_button("server-button", "connect")
+                    .on_click(send(cx, |_| Message::Connect.into())),
             ))
             .child(labeled_row(
                 "Think:",
                 RadioGroup::horizontal("think-group")
                     .children(THINK_ORDER.iter().copied())
                     .selected_index(think_index)
-                    .on_click(cx.listener(|this, index, _, _| this.set_think(index))),
+                    .on_click(send(cx, |index: &usize| Message::SetThink(*index).into())),
             ))
             .child(labeled_row(
                 "Excution:",
                 RadioGroup::horizontal("method-group")
                     .children(METHOD_ORDER.iter().copied())
                     .selected_index(method_index)
-                    .on_click(cx.listener(|this, index, _, _| this.set_method(index))),
+                    .on_click(send(cx, |index: &usize| Message::SetMethod(*index).into())),
             ))
             .child(number_row("Context window:", &self.inputs.context_window))
             .child(number_row("Temperature:", &self.inputs.temperature))

@@ -1,29 +1,49 @@
 //! Starting, stopping and running glossary passes. Each pass reads one chapter
 //! and rewrites the glossary built so far, so it lands in that chapter whole.
+//!
+//! A run takes its chapters from the front of the queue one at a time: each
+//! pass is streamed by a task of its own, which ends by sending
+//! [`Message::ChapterDone`], and `update` then starts the next.
 
+use super::actions::Run;
 use crate::{
     client::{Reply, glossary_prompt, reply_stream},
     error::{Error, Result},
+    message::SendAsync as _,
     page::Activity,
-    screen::Glossary,
+    screen::glossary::{Glossary, message::Message},
 };
 use futures::StreamExt as _;
-use gpui_kit::{AsyncWindowContext, ClickEvent, Context, WeakEntity, Window};
-use rig::{Agent, message::Message};
+use gpui_kit::{AsyncWindowContext, Context, WeakEntity, Window};
+use rig::{Agent, message::Message as ChatMessage};
 use std::collections::VecDeque;
 
 const GLOSSARY_CUT_OFF: &str = "The model hit its limit partway through a glossary pass, so the \
      run stopped and kept the last complete pass. Try a model with a larger context window.";
 
 impl Glossary {
-    pub fn run(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let pending = (self.current_chapter..self.chapters.len()).collect();
+    /// Starts the run `run` asks for, unless a run is in progress.
+    pub(super) fn run(&mut self, run: Run, window: &mut Window, cx: &mut Context<Self>) {
+        // Starting would cancel the run in progress.
+        if self.is_running() {
+            return;
+        }
+        let pending = match run {
+            Run::All(i) => (i..self.chapters.len()).collect(),
+            Run::Chapter(i) => VecDeque::from([i]),
+        };
         self.start(pending, window, cx);
     }
 
-    /// Starts a run over the `pending` chapters, replacing the one in progress. The
-    /// run is held in the server's handles, so [`Self::stop`] cancels it by dropping it.
-    pub fn start(&mut self, pending: VecDeque<usize>, window: &mut Window, cx: &mut Context<Self>) {
+    /// Starts a run over the `pending` chapters, replacing the one in progress.
+    /// The task of the pass in progress is held in the server's handles, so
+    /// [`Self::stop`] cancels the run by dropping it.
+    pub(super) fn start(
+        &mut self,
+        pending: VecDeque<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Err(error) = self.server.check_ready(cx) {
             error.prompt("Can't run glossary", window, cx);
             return;
@@ -34,22 +54,7 @@ impl Glossary {
         }
         self.stop();
         self.pending = pending;
-
-        let run = cx.spawn_in(window, async move |this, cx| {
-            let result = run_chapters(&this, cx).await;
-            this.update_in(cx, |this, window, cx| {
-                this.stop();
-                match result {
-                    Ok(true) => this.show_complete(cx),
-                    Ok(false) => {}
-                    Err(error) => error.prompt("Glossary failed", window, cx),
-                }
-                cx.notify();
-            })?;
-            Ok(())
-        });
-        self.server.handles.push(run);
-        cx.notify();
+        self.next_chapter(window, cx);
     }
 
     /// Cancels the run, if any. A pass cut short gives way to the last complete
@@ -64,6 +69,54 @@ impl Glossary {
         }
         self.pending.clear();
         self.server.abort();
+    }
+
+    /// Starts a pass over the next queued chapter, or ends the run when none are left.
+    fn next_chapter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(chapter) = self.pending.pop_front() else {
+            return self.stop();
+        };
+        let (agent, prompt) = match self.prepare_chapter(chapter, cx) {
+            Ok(prepared) => prepared,
+            Err(error) => return self.fail(error, window, cx),
+        };
+        let pass = cx.spawn_in(window, async move |this, cx| {
+            let result = stream_chapter(&this, &agent, prompt, chapter, cx).await;
+            // This ends the pass, and its handling drops this task, so nothing
+            // after it may await.
+            this.send(cx, Message::ChapterDone { chapter, result })
+        });
+        // Dropping the last pass's task, which is the one that just ended.
+        self.server.handles = vec![pass];
+    }
+
+    /// Completes the pass over `chapter` when it succeeded and moves on to the
+    /// next, or ends the run when it failed. A run that ends on the book's last
+    /// chapter has finished the glossary.
+    pub(super) fn chapter_done(
+        &mut self,
+        chapter: usize,
+        result: Result<()>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(error) = result {
+            return self.fail(error, window, cx);
+        }
+        self.complete_chapter(chapter);
+        if !self.pending.is_empty() {
+            return self.next_chapter(window, cx);
+        }
+        self.stop();
+        if chapter + 1 == self.chapters.len() {
+            self.show_complete(cx);
+        }
+    }
+
+    /// Ends the run, reporting the `error` that ended it.
+    fn fail(&mut self, error: Error, window: &mut Window, cx: &mut Context<Self>) {
+        self.stop();
+        error.prompt("Glossary failed", window, cx);
     }
 
     /// Readies a pass over `chapter`: the agent, and the prompt holding the
@@ -91,38 +144,20 @@ impl Glossary {
         let current = &mut self.chapters[chapter];
         current.content.clear();
         current.activity = Activity::Active(1);
-        cx.notify();
         Ok((agent, prompt))
     }
 
-    fn append_content(&mut self, chapter: usize, text: &str, cx: &mut Context<Self>) {
+    pub(super) fn append_content(&mut self, chapter: usize, text: &str) {
         if let Some(chapter) = self.chapters.get_mut(chapter) {
             chapter.content.push_str(text);
-            cx.notify();
         }
     }
 
-    fn complete_chapter(&mut self, chapter: usize, cx: &mut Context<Self>) {
+    fn complete_chapter(&mut self, chapter: usize) {
         if let Some(chapter) = self.chapters.get_mut(chapter) {
             chapter.activity = Activity::Complete;
-            cx.notify();
         }
     }
-}
-
-/// Runs a pass over each queued chapter in turn until none are left. True when
-/// the last pass was over the book's last chapter, finishing the glossary.
-async fn run_chapters(this: &WeakEntity<Glossary>, cx: &mut AsyncWindowContext) -> Result<bool> {
-    let mut finished = false;
-    while let Some(chapter) = this.update(cx, |this, _| this.pending.pop_front())? {
-        let (agent, prompt) = this.update(cx, |this, cx| this.prepare_chapter(chapter, cx))??;
-        stream_chapter(this, &agent, prompt, chapter, cx).await?;
-        finished = this.update(cx, |this, cx| {
-            this.complete_chapter(chapter, cx);
-            chapter + 1 == this.chapters.len()
-        })?;
-    }
-    Ok(finished)
 }
 
 /// Streams one pass's glossary into `chapter`. A pass cut off by the model's
@@ -134,12 +169,10 @@ async fn stream_chapter(
     chapter: usize,
     cx: &mut AsyncWindowContext,
 ) -> Result<()> {
-    let mut replies = reply_stream(agent, Message::user(prompt));
+    let mut replies = reply_stream(agent, ChatMessage::user(prompt));
     while let Some(reply) = replies.next().await {
         match reply? {
-            Reply::Text(text) => {
-                this.update(cx, |this, cx| this.append_content(chapter, &text, cx))?
-            }
+            Reply::Text(text) => this.send(cx, Message::AppendContent { chapter, text })?,
             Reply::Truncated => return Err(Error::Error(GLOSSARY_CUT_OFF)),
         }
     }

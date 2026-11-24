@@ -1,5 +1,6 @@
 use crate::{
-    screen::Glossary,
+    message::send,
+    screen::glossary::{Glossary, message::Message},
     widget::{LabelButton, PrimaryBorder as _, entry_sidebar, primary_button},
 };
 use gpui_kit::{
@@ -28,28 +29,30 @@ impl Glossary {
             .anchor(Anchor::TopLeft)
             .trigger(primary_button("epub-trigger", "epub"))
             .child(
-                LabelButton::new("epub-button", "epub", epub, cx.listener(Self::select_epub))
-                    .disable(running),
+                LabelButton::new(
+                    "epub-button",
+                    "epub",
+                    epub,
+                    send(cx, |_| Message::SelectEpub),
+                )
+                .disable(running),
             )
             .child(
                 h_flex().justify_center().items_center().child(
                     primary_button("save-button", "save")
                         .disabled(running)
-                        .on_click(cx.listener(Self::save)),
+                        .on_click(send(cx, |_| Message::Save)),
                 ),
             )
     }
 
     pub fn glossary_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
         if self.is_running() {
-            primary_button("cancel-button", "cancel").on_click(cx.listener(|this, _, _, cx| {
-                this.stop();
-                cx.notify();
-            }))
+            primary_button("cancel-button", "cancel").on_click(send(cx, |_| Message::Stop))
         } else {
             primary_button("glossary-button", "glossary")
                 .disabled(!self.can_run())
-                .on_click(cx.listener(Self::run))
+                .on_click(send(cx, |_| Message::RunFromCurrent))
         }
     }
 

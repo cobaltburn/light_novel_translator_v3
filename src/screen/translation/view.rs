@@ -1,4 +1,9 @@
-use crate::screen::translation::Translation;
+use crate::{
+    message::send,
+    screen::translation::{
+        SavePage, ScrollTo, SetDisplay, Translate, Translation, message::Message,
+    },
+};
 use gpui_kit::{
     Context, InteractiveElement as _, IntoElement, ParentElement as _, Render, Styled, Window,
     base::{h_flex, v_flex},
@@ -12,10 +17,14 @@ impl Render for Translation {
             .h_4_5()
             .my_auto()
             .track_focus(&self.focus_handle)
-            .on_action(cx.listener(Self::save_page))
-            .on_action(cx.listener(Self::scroll_to))
-            .on_action(cx.listener(Self::set_display_action))
-            .on_action(cx.listener(Self::translate_action))
+            .on_action(send(cx, |action: &SavePage| Message::SavePage(action.page)))
+            .on_action(send(cx, |action: &ScrollTo| Message::ScrollTo(action.part)))
+            .on_action(send(cx, |action: &SetDisplay| {
+                Message::SetDisplay(action.0)
+            }))
+            .on_action(send(cx, |action: &Translate| {
+                Message::Translate(action.clone())
+            }))
             .child(self.menu_bar(cx))
             .child(
                 h_flex()

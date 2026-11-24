@@ -1,12 +1,12 @@
 [package]
 name = "light_novel_translator"
-version = "0.1.0"
+version = "2.0.0"
 edition = "2024"
 
 [dependencies]
-fast_html2md = "0.0.63"
+fast_html2md = "0.0.66"
 futures = "0.3.34"
-gpui-kit = "0.10.0"
+gpui-kit = "0.11.0"
 log = { version = "0.4.35", features = ["max_level_debug"] }
 mime_guess = "2.0.5"
 percent-encoding = "2.3.2"
@@ -15,11 +15,11 @@ pulldown-cmark = "0.13.6"
 quick-xml = "0.42.0"
 rayon = "1.12.0"
 rbook = "0.7.13"
-regex = "1.13.1"
+regex = "1.13.2"
 reqwest-middleware = "0.5.2"
 reqwest-retry = "0.9.1"
 rfd = { version = "0.18.0", features = ["xdg-portal"] }
-rig = { version = "0.46.0", features = ["memory", "reqwest-middleware"] }
+rig = { version = "0.47.0", default-features = false, features = ["agent", "memory", "reqwest-middleware", "rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 smol = "2.0.2"

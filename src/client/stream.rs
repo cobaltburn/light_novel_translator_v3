@@ -58,7 +58,9 @@ mod tests {
     use serde_json::Value;
 
     fn finished(reason: Option<FinishReason>) -> CompletionCall {
-        CompletionCall::new(0, Usage::default(), Value::Null).with_finish_reason(reason)
+        let mut call = CompletionCall::new(0, Usage::default(), Value::Null);
+        call.finish_reason = reason;
+        call
     }
 
     #[test]

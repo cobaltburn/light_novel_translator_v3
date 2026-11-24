@@ -128,7 +128,8 @@ fn summarize_overflow(conversation: &mut Conversation, window: usize) {
         summary.push_str(&line);
     }
     state.summary = truncate_summary(summary);
-    apply_summary(conversation, conversation.id(upto), &state);
+    let replaces = messages[..upto].to_vec();
+    apply_summary(conversation, &replaces, &state);
 }
 
 /// Keeps the newest [`SUMMARY_MAX_BYTES`] of `summary`, marking the cut.

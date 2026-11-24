@@ -1,25 +1,26 @@
 //! Opening and saving the tab's epub, glossary, translation and recovery file.
 
 use crate::{
-    dialogs::{self, complete, select_epub, select_glossary, select_recovery},
+    dialogs::{self, complete, save_file, select_epub, select_glossary, select_recovery},
     epub::get_pages,
-    error::TaskExt as _,
-    page::{Page, absolute_page_path, check_all_pages, save_translation},
-    screen::Translation,
+    error::{Error, TaskExt as _},
+    message::SendAsync as _,
+    page::{Page, absolute_page_path, check_all_pages, page_markdown, save_translation},
+    screen::{Translation, translation::message::Message},
 };
-use gpui_kit::{AppContext as _, ClickEvent, Context, ExternalPaths, Window};
+use gpui_kit::{AppContext as _, Context, ExternalPaths, Window};
 use smol::fs;
 use std::{collections::HashMap, mem, path::PathBuf};
 
 impl Translation {
-    fn set_pages(&mut self, path: impl Into<PathBuf>, pages: Vec<Page>) {
+    pub(super) fn set_pages(&mut self, path: impl Into<PathBuf>, pages: Vec<Page>) {
         self.current_page = 0;
         self.file_path = Some(path.into());
         self.pages = pages;
         self.glossary = None;
     }
 
-    pub fn select_epub(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn select_epub(&self, window: &mut Window, cx: &mut Context<Self>) {
         if self.is_running() {
             return;
         }
@@ -27,21 +28,15 @@ impl Translation {
             if let Some(handle) = select_epub().await {
                 let buffer = handle.read().await;
                 let pages = cx.background_spawn(async { get_pages(buffer) }).await?;
-
-                this.update(cx, |this, cx| {
-                    if !this.is_running() {
-                        this.set_pages(handle.path(), pages);
-                        cx.notify();
-                    }
-                })?;
+                this.send(cx, Message::EpubLoaded(handle.path().into(), pages))?;
             }
             Ok(())
         })
         .detach_and_prompt_err("Failed to open epub", window, cx);
     }
 
-    pub fn on_drop_epub(
-        &mut self,
+    pub(super) fn drop_epub(
+        &self,
         paths: &ExternalPaths,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -56,40 +51,28 @@ impl Translation {
             cx.spawn(async move |this, cx| {
                 let buffer = fs::read(&path).await?;
                 let pages = cx.background_spawn(async { get_pages(buffer) }).await?;
-
-                this.update(cx, |this, cx| {
-                    if !this.is_running() {
-                        this.set_pages(path, pages);
-                        cx.notify();
-                    }
-                })?;
+                this.send(cx, Message::EpubLoaded(path, pages))?;
                 Ok(())
             })
             .detach_and_prompt_err("Failed to open epub", window, cx);
         };
     }
 
-    pub fn select_glossary(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn select_glossary(&self, window: &mut Window, cx: &mut Context<Self>) {
         if self.is_running() {
             return;
         }
         cx.spawn(async move |this, cx| {
             if let Some(handle) = select_glossary().await {
                 let glossary = String::from_utf8(handle.read().await)?;
-                this.update(cx, |view, cx| {
-                    if view.is_running() {
-                        return;
-                    }
-                    view.glossary = Some((handle.path().into(), glossary));
-                    cx.notify();
-                })?;
+                this.send(cx, Message::GlossaryLoaded(handle.path().into(), glossary))?;
             }
             Ok(())
         })
         .detach_and_prompt_err("Failed to open glossary", window, cx);
     }
 
-    pub fn save(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn save(&self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(name) = self.file_path.as_ref().and_then(|p| p.file_prefix()) else {
             return;
         };
@@ -104,7 +87,7 @@ impl Translation {
         .detach_and_prompt_err("Failed to save translation", window, cx)
     }
 
-    pub fn recover(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn recover(&self, window: &mut Window, cx: &mut Context<Self>) {
         if self.is_running() {
             return;
         }
@@ -113,20 +96,14 @@ impl Translation {
             if let Some(handle) = handle {
                 let json = handle.read().await;
                 let pages: Vec<Page> = serde_json::from_slice(&json)?;
-                this.update(cx, |this, cx| {
-                    if this.is_running() {
-                        return;
-                    }
-                    this.recover_pages(pages);
-                    cx.notify();
-                })?;
+                this.send(cx, Message::Recovered(pages))?;
             }
             Ok(())
         })
         .detach_and_prompt_err("Failed to load recovery", window, cx);
     }
 
-    pub fn recover_pages(&mut self, pages: Vec<Page>) {
+    pub(super) fn recover_pages(&mut self, pages: Vec<Page>) {
         let mut sections: HashMap<PathBuf, _> = pages
             .into_iter()
             .map(|p| (absolute_page_path(p.path), p.sections))
@@ -145,6 +122,25 @@ impl Translation {
             .for_each(|p| p.sections.iter_mut().for_each(|s| s.clean()));
 
         check_all_pages(&mut self.pages);
+    }
+
+    /// Saves page `page` as markdown, wherever the user picks.
+    pub(super) fn save_page(&self, page: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(page) = self.pages.get(page) {
+            let page = page.clone();
+            cx.background_spawn(async move {
+                let Some(name) = page.file_stem() else {
+                    return Ok(());
+                };
+
+                if let Some(handle) = save_file(format!("{name}.md")).await {
+                    let content = page_markdown(&page);
+                    handle.write(content.as_ref()).await?;
+                }
+                Ok::<_, Error>(())
+            })
+            .detach_and_prompt_err("Failed to save page", window, cx);
+        };
     }
 
     /// Writes the pages next to the epub, for `recover` to load after a crash.

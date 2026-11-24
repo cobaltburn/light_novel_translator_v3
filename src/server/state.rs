@@ -1,7 +1,8 @@
 use crate::{
     client::{Client, Settings},
     error::{Error, Result},
-    server::{Method, ServerBuilder, ServerUpdate, SettingsInputs},
+    message::Update,
+    server::{Method, ServerBuilder, SettingsInputs, message::Message},
 };
 use gpui_kit::{Context, Entity, Task, Window, component::select::SelectState};
 
@@ -16,7 +17,10 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new<T: ServerUpdate>(window: &mut Window, cx: &mut Context<T>) -> Self {
+    pub fn new<T>(window: &mut Window, cx: &mut Context<T>) -> Self
+    where
+        T: Update<Message: From<Message>>,
+    {
         ServerBuilder::default().build(window, cx)
     }
 
