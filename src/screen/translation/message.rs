@@ -24,13 +24,9 @@ pub enum Message {
     Translate(Translate),
     Stop,
     Server(server::message::Message),
-
-    // Results of the tasks above.
     EpubLoaded(PathBuf, Vec<Page>),
     GlossaryLoaded(PathBuf, String),
     Recovered(Vec<Page>),
-
-    // The progress of a run, sent by the task of the job in progress.
     SetActivity {
         page: usize,
         activity: Activity,
@@ -40,14 +36,11 @@ pub enum Message {
         part: usize,
         text: String,
     },
-    ClearSection {
-        page: usize,
-        part: usize,
-    },
     CleanSection {
         page: usize,
         part: usize,
     },
+    Backup,
     /// The job over `page` ended, the last message its task sends.
     JobDone {
         page: usize,

@@ -101,7 +101,7 @@ impl Translation {
     ) {
         match result {
             Ok(()) => {
-                self.complete_page(page, window, cx);
+                check_page_at(&mut self.pages, page);
                 self.next_job(window, cx);
             }
             Err(error) => self.fail(error, window, cx),
@@ -165,11 +165,5 @@ impl Translation {
         if let Some(&(part, _)) = run.parts.first() {
             self.pages[page].activity = Activity::Active(part + 1);
         }
-    }
-
-    /// Checks a translated page, then backs the book up next to the epub.
-    fn complete_page(&mut self, page: usize, window: &Window, cx: &mut Context<Self>) {
-        check_page_at(&mut self.pages, page);
-        self.backup(window, cx);
     }
 }

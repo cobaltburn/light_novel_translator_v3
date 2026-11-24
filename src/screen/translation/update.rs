@@ -49,8 +49,8 @@ impl Update for Translation {
 
             Message::SetActivity { page, activity } => self.set_activity(page, activity),
             Message::AppendContent { page, part, text } => self.append_content(page, part, &text),
-            Message::ClearSection { page, part } => self.clear_section(page, part),
             Message::CleanSection { page, part } => self.clean_section(page, part),
+            Message::Backup => self.backup(window, cx),
             Message::JobDone { page, result } => self.job_done(page, result, window, cx),
         }
     }
@@ -72,12 +72,6 @@ impl Translation {
     fn clean_section(&mut self, page: usize, part: usize) {
         if let Some(section) = self.section_mut(page, part) {
             section.clean();
-        }
-    }
-
-    fn clear_section(&mut self, page: usize, part: usize) {
-        if let Some(section) = self.section_mut(page, part) {
-            section.content.clear();
         }
     }
 
