@@ -85,8 +85,7 @@ impl Translation {
         self.pages
             .iter()
             .enumerate()
-            .map(|(page, p)| p.error_jobs(page))
-            .flatten()
+            .flat_map(|(page, p)| p.error_jobs(page))
             .collect()
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     error::{Error, Result, TaskExt as _},
     screen::format::Format,
 };
-use gpui_kit::{AppContext as _, Context, ExternalPaths, Image, ImageFormat, Window};
+use gpui_kit::{AppContext as _, ClickEvent, Context, ExternalPaths, Image, ImageFormat, Window};
 use rbook::Epub;
 use smol::{
     fs::{self, read_dir, read_to_string},
@@ -167,7 +167,7 @@ impl Format {
         self.source_folder = Some(source_folder.into());
     }
 
-    pub fn build_epub(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn build_epub(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         let builder = self.get_build_content();
         self.inputs.clear(window, cx);
         cx.notify();

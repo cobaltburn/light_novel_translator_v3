@@ -97,7 +97,7 @@ impl Format {
             primary_button("build-button", "build")
                 .flex()
                 .disabled(!can_build)
-                .on_click(cx.listener(|this, _, window, cx| this.build_epub(window, cx))),
+                .on_click(cx.listener(Self::build_epub)),
         )
     }
 }

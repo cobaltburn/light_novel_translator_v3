@@ -64,10 +64,9 @@ impl Page {
                 .overflow_y_scroll()
                 .bg(cx.theme().popover)
                 .children(self.errors.is_empty().not().then(|| {
-                    card_button(format!("error-button-all"), format!("All errors"), running)
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.start_errors(page, window, cx)
-                        }))
+                    card_button("error-button-all", "All errors", running).on_click(
+                        cx.listener(move |this, _, window, cx| this.start_errors(page, window, cx)),
+                    )
                 }))
                 .children(empty_buttons.chain(error_buttons)),
         )
@@ -82,7 +81,7 @@ fn error_label(error: &PageError) -> String {
     let position = error.index + 1;
     match error.error {
         ErrorType::Japanese => format!("Japanese error: {:2}", position),
-        ErrorType::Size(c) => format!("Size error: {:2}, count:{}", position, c),
+        ErrorType::Size(count) => format!("Size error: {:2}, count:{}", position, count),
         ErrorType::Repeat => format!("Repeat error: {:2}", position),
         ErrorType::Copy => format!("Copy error: {:2}", position),
         ErrorType::Image => format!("Image Tag error: {:2}", position),

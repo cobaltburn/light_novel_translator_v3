@@ -2,12 +2,13 @@ use crate::{
     app::Screen,
     screen::{Format, Glossary, Translation},
 };
-use gpui_kit::{AppContext, Context, Entity, Window};
+use gpui_kit::{AppContext, Context, Entity, ScrollHandle, Window};
 
 #[derive(Debug)]
 pub struct Translator {
     pub screen: Screen,
     pub active_tab: usize,
+    pub tab_scroll_handle: ScrollHandle,
     pub translations: Vec<Entity<Translation>>,
     pub glossary: Entity<Glossary>,
     pub format: Entity<Format>,
@@ -24,6 +25,7 @@ impl Translator {
             active_tab: 0,
             screen: Screen::default(),
             translations: vec![translation_entity],
+            tab_scroll_handle: ScrollHandle::new(),
         }
     }
 

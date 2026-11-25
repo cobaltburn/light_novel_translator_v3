@@ -12,7 +12,7 @@ use crate::{
     text::image_marker,
 };
 use quick_xml::{
-    Reader, Writer,
+    Reader, Writer, XmlVersion,
     events::{BytesStart, BytesText, Event},
 };
 use std::io::Cursor;
@@ -67,12 +67,7 @@ pub fn image_anchors(
                 reader.read_to_end(tag.name())?;
             }
             Event::Empty(tag) if is_image(&tag) => {
-                let attr = if tag.name().as_ref() == IMG_TAG {
-                    SRC
-                } else {
-                    XLINK
-                };
-                pending.push(update_tag_path(tag, links, IMAGES, attr)?);
+                pending.push(html_image(tag, links)?);
             }
             Event::Eof => break,
             _ => (),
@@ -81,4 +76,59 @@ pub fn image_anchors(
 
     anchors.extend(pending.into_iter().map(|tag| (tag, None)));
     Ok(anchors)
+}
+
+/// The `<img>` to write for an image of the source page, pointing at its output path.
+///
+/// An svg `<image>` only renders inside its `<svg>`, and its `xlink` prefix is
+/// undeclared outside it, so it becomes an `<img>` of the same picture.
+fn html_image(tag: BytesStart<'_>, links: PageLinks<'_>) -> Result<BytesStart<'static>> {
+    if tag.name().as_ref() == IMG_TAG {
+        return update_tag_path(tag, links, IMAGES, SRC);
+    }
+    let Some(link) = tag.try_get_attribute(XLINK)? else {
+        return Ok(tag.into_owned());
+    };
+
+    let link = link.normalized_value(XmlVersion::Implicit1_0)?;
+    let src = links.resolve(&link, IMAGES);
+    Ok(BytesStart::new(IMG_TAG)
+        .with_attributes([(SRC, src.as_str()), ("alt", "")])
+        .into_owned())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::epub::resources::ResourcePaths;
+
+    #[test]
+    fn writes_svg_images_as_img() {
+        let paths = ResourcePaths::default();
+        let links = PageLinks {
+            page: "/OEBPS/text/p-001.xhtml",
+            paths: &paths,
+        };
+        let html = r#"<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xlink="http://www.w3.org/1999/xlink">
+<head><title>t</title></head>
+<body>
+<svg viewBox="0 0 1200 1700"><image width="1200" height="1700" xlink:href="../image/i-001.jpg"/></svg>
+<p><img class="gaiji" src="../image/g-001.png"/></p>
+<p>Text</p>
+</body>
+</html>"#;
+
+        let anchors = image_anchors(html, links).unwrap();
+        let tags: Vec<_> = anchors
+            .iter()
+            .map(|(tag, _)| -> &str { tag.as_ref() })
+            .collect();
+        assert_eq!(
+            tags,
+            [
+                r#"img src="../Images/i-001.jpg" alt="""#,
+                r#"img class="gaiji" src="../Images/g-001.png""#,
+            ]
+        );
+    }
 }

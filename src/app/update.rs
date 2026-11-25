@@ -3,7 +3,7 @@ use crate::{
     screen::Translation,
     server::ServerUpdate as _,
 };
-use gpui_kit::{AppContext, Context, Window};
+use gpui_kit::{AppContext, ClickEvent, Context, Window};
 
 impl Translator {
     pub fn close_tab(&mut self, index: usize, cx: &mut Context<Self>) {
@@ -17,7 +17,7 @@ impl Translator {
         }
     }
 
-    pub fn new_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn new_tab(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         let server_builder = { self.active_tab().read(cx).server.builder(cx) };
         let tab = cx.new(|cx| {
             let mut tab = Translation::from_server(server_builder.build(window, cx), cx);
@@ -25,6 +25,11 @@ impl Translator {
             tab
         });
         self.translations.push(tab);
+        cx.notify();
+    }
+
+    pub fn set_tab(&mut self, i: &usize, _: &mut Window, cx: &mut Context<Self>) {
+        self.active_tab = *i;
         cx.notify();
     }
 

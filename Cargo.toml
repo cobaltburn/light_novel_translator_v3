@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 fast_html2md = "0.0.66"
 futures = "0.3.34"
-gpui-kit = "0.11.0"
+gpui-kit = { version = "0.11.0", features = ["gpui-fast"] }
 log = { version = "0.4.35", features = ["max_level_debug"] }
 mime_guess = "2.0.5"
 percent-encoding = "2.3.2"
